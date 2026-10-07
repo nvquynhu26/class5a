@@ -17,7 +17,7 @@
       --neon-magenta: #ff00ea;
       --neon-green: #00ff66;
       --bg-dark: #0a0a0f;
-      --hud-bg: rgba(10, 10, 15, 0.85);
+      --hud-bg: rgba(10, 10, 15, 0.9);
       --hud-border: 1px solid var(--neon-cyan);
     }
 
@@ -35,12 +35,12 @@
       pointer-events: none;
     }
     #header h1 {
-      margin: 0; font-size: 2.5rem; letter-spacing: 4px;
+      margin: 0; font-size: 2.2rem; letter-spacing: 4px;
       text-shadow: 0 0 10px var(--neon-cyan);
     }
     #header p {
-      margin: 5px 0 0 0; font-size: 0.9rem; color: #aaa;
-      text-transform: uppercase; letter-spacing: 2px;
+      margin: 5px 0 0 0; font-size: 0.85rem; color: #888;
+      letter-spacing: 2px;
     }
 
     #layout-container {
@@ -48,7 +48,7 @@
     }
     #globe-container {
       width: 100%; height: 100%;
-      transition: width 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+      transition: width 0.6s cubic-bezier(0.25, 1, 0.5, 1);
       position: relative;
     }
 
@@ -57,48 +57,49 @@
       background: var(--hud-bg);
       border-left: var(--hud-border);
       box-shadow: -5px 0 20px rgba(0, 243, 255, 0.2);
-      transition: width 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+      transition: width 0.6s cubic-bezier(0.25, 1, 0.5, 1);
       display: flex; flex-direction: column;
       overflow: hidden; z-index: 5;
     }
     .panel-content {
       padding: 30px; width: 100vw; max-width: 50vw; opacity: 0;
-      transition: opacity 0.5s;
+      transition: opacity 0.4s;
     }
 
     body.panel-open #globe-container { width: 50%; }
     body.panel-open #side-panel { width: 50%; }
-    body.panel-open .panel-content { opacity: 1; transition-delay: 0.4s; }
+    body.panel-open .panel-content { opacity: 1; transition-delay: 0.3s; }
 
+    /* Tooltip Cyberpunk */
     .aero-tooltip {
-      background: var(--hud-bg);
+      background: rgba(10, 10, 15, 0.95);
       border: 1px solid var(--neon-cyan);
-      padding: 10px; border-radius: 4px;
-      box-shadow: 0 0 10px rgba(0, 243, 255, 0.3);
-      backdrop-filter: blur(4px); pointer-events: none;
+      padding: 10px 14px;
+      border-radius: 2px;
+      box-shadow: 0 0 12px rgba(0, 243, 255, 0.4);
+      pointer-events: none;
       font-size: 0.85rem;
+      line-height: 1.4;
+      color: #fff;
     }
-
-    /* Hiệu ứng nhấp nháy cảnh báo khi chưa zoom */
-    .zoom-warning { color: #ff3366; font-size: 0.8rem; margin-top: 5px; animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
 
     #blueprint-view {
-      width: 100%; height: 400px;
+      width: 100%; height: 350px;
       border: 1px dashed var(--neon-green);
       margin-top: 20px; position: relative;
+      background: rgba(0, 255, 102, 0.02);
     }
     .hud-title {
-      font-size: 1.5rem; border-bottom: 1px solid var(--neon-cyan);
-      padding-bottom: 10px; margin-bottom: 20px;
+      font-size: 1.4rem; border-bottom: 1px solid var(--neon-cyan);
+      padding-bottom: 8px; margin-bottom: 16px;
     }
     .close-btn {
       position: absolute; top: 20px; right: 20px;
       background: transparent; color: var(--neon-magenta);
       border: 1px solid var(--neon-magenta);
-      padding: 5px 15px; cursor: pointer; font-family: inherit;
+      padding: 6px 14px; cursor: pointer; font-family: inherit;
     }
-    .close-btn:hover { background: var(--neon-magenta); color: #fff; box-shadow: 0 0 10px var(--neon-magenta); }
+    .close-btn:hover { background: var(--neon-magenta); color: #fff; }
   </style>
 </head>
 <body>
@@ -126,119 +127,80 @@
   </div>
 
   <script>
-    const MAX_HOVER_DISTANCE = 160; // Ngưỡng camera để kích hoạt hover (Bán kính quả cầu là 100)
-    let allValidAirports = [];
-    let currentLOD = -1;
-
     const globeContainer = document.getElementById('globe-container');
+    
+    // Khởi tạo Globe với cấu hình tối giản, mượt mà nhất
     const world = Globe()(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
-      .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
       .backgroundColor('#0a0a0f')
       .showAtmosphere(true)
       .atmosphereColor('#00f3ff')
-      .atmosphereAltitude(0.15)
-      // Chuyển sang dùng labelsData để tạo chấm phẳng 2D thay vì khối trụ 3D
-      .labelLat('latitude_deg')
-      .labelLng('longitude_deg')
-      .labelDotRadius('size')
-      .labelText(() => '') // Ẩn text, chỉ hiện chấm tròn
-      .labelSize(0)
-      .labelColor(() => '#00f3ff')
-      .onLabelHover(point => {
-        if (!world.camera()) return;
-        const currentZoom = world.camera().position.length();
-
-        // CHẶN HOVER NẾU CHƯA ZOOM VÀO GẦN
-        if (currentZoom > MAX_HOVER_DISTANCE) {
-          globeContainer.style.cursor = 'default';
-          world.tooltipContent(() => '');
-          return;
-        }
-
+      .atmosphereAltitude(0.12)
+      
+      // CẤU HÌNH ĐIỂM HOÀN TOÀN PHẲNG (KHÔNG CÓ CHIỀU CAO HÌNH TRỤ)
+      .pointLat('latitude_deg')
+      .pointLng('longitude_deg')
+      .pointAltitude(0.001) // Cực sát mặt cầu, chấm hoàn toàn phẳng
+      .pointRadius('size')
+      .pointColor(d => d.type === 'large_airport' ? '#00f3ff' : '#00aa77')
+      .pointResolution(6)   // Đa giác cực thấp -> GPU xử lý siêu nhẹ
+      
+      // SỰ KIỆN HOVER: Đã loại bỏ logic phức tạp, hover nhận ngay
+      .onPointHover(point => {
         if (point) {
-          globeContainer.style.cursor = 'crosshair';
+          globeContainer.style.cursor = 'pointer';
           world.tooltipContent(() => `
             <div class="aero-tooltip">
-              <strong style="color:#00ff66">${point.name}</strong><br>
-              ID: ${point.iata_code || point.ident} | Type: ${point.type}<br>
-              Location: ${point.municipality || 'N/A'}, ${point.iso_country}
+              <strong style="color:var(--neon-green)">${point.name}</strong><br>
+              <span style="color:#aaa">CODE:</span> ${point.iata_code || point.ident} | <span style="color:#aaa">TYPE:</span> ${point.type}<br>
+              <span style="color:#aaa">LOCATION:</span> ${point.municipality || 'N/A'}, ${point.iso_country}
             </div>
           `);
         } else {
           globeContainer.style.cursor = 'default';
         }
       })
-      .onLabelClick(point => {
-        if (!world.camera()) return;
-        const currentZoom = world.camera().position.length();
-        // KHÔNG CHO CLICK NẾU CHƯA ZOOM
-        if (currentZoom > MAX_HOVER_DISTANCE) return; 
-        
-        openPanel(point);
+      .onPointClick(point => {
+        if (point) openPanel(point);
       });
 
+    // Quay cực chậm và chống rung giật
     world.controls().autoRotate = true;
-    world.controls().autoRotateSpeed = 0.1;
-    world.controls().enableDamping = true; // Xoay mượt hơn
+    world.controls().autoRotateSpeed = 0.15;
+    world.controls().enableDamping = true;
+    world.controls().dampingFactor = 0.05;
 
-    // Thuật toán tối ưu LOD (Level of Detail) theo khoảng cách camera
-    function updateLOD() {
-      if (!world.camera()) return;
-      const dist = world.camera().position.length();
-      
-      // Mức 1: Nhìn toàn cảnh. Mức 2: Zoom gần
-      const level = dist > 180 ? 1 : 2; 
-
-      if (level !== currentLOD) {
-        currentLOD = level;
-        if (level === 1) {
-          // Khi nhìn xa: Ẩn bớt small_airport để chống lag tuyệt đối
-          const optimizedData = allValidAirports.filter(d => d.type === 'large_airport' || d.type === 'medium_airport');
-          world.labelsData(optimizedData);
-        } else {
-          // Khi zoom gần: Hiện tất cả sân bay để tra cứu
-          world.labelsData(allValidAirports);
-        }
-      }
-    }
-
-    // Lắng nghe thao tác zoom/xoay của người dùng để cập nhật dữ liệu
-    world.controls().addEventListener('change', updateLOD);
-
-    // Tải dữ liệu
+    // TẢI FILE CSV - LỌC TRIỆT ĐỂ ĐỂ KHÔNG BỊ TRÀN RAM
     Papa.parse('airports.csv', {
       download: true,
       header: true,
       dynamicTyping: true,
       complete: function(results) {
-        const excludedTypes = ['closed', 'heliport', 'seaplane_base', 'balloonport'];
-        
-        allValidAirports = results.data.filter(d => 
-          d.latitude_deg && d.longitude_deg && !excludedTypes.includes(d.type)
-        ).map(d => {
-          let pSize = 0.05; 
-          if (d.type === 'large_airport') pSize = 0.25;
-          if (d.type === 'medium_airport') pSize = 0.15;
-          return {
-            lat: d.latitude_deg,
-            lng: d.longitude_deg,
-            size: pSize,
-            ...d
-          };
-        });
+        // Chỉ giữ lại large và medium (LOẠI BỎ TOÀN BỘ small_airport, heliport, closed...)
+        const cleanAirports = results.data.filter(d => 
+          d.latitude_deg && d.longitude_deg &&
+          (d.type === 'large_airport' || d.type === 'medium_airport')
+        ).map(d => ({
+          ...d,
+          // Sân bay lớn chấm to rõ, sân bay vừa chấm nhỏ tinh tế
+          size: d.type === 'large_airport' ? 0.35 : 0.15
+        }));
 
-        // Chạy kiểm tra LOD lần đầu để quyết định số lượng điểm được render
-        setTimeout(updateLOD, 500);
+        console.log(`Loaded ${cleanAirports.length} commercial airports. System optimized.`);
+        world.pointsData(cleanAirports);
       }
     });
 
-    // Các hàm UI giữ nguyên
+    // XỬ LÝ MỞ PANEL CHI TIẾT
     function openPanel(point) {
       world.controls().autoRotate = false;
-      world.pointOfView({ lat: point.lat, lng: point.lng, altitude: 0.8 }, 1000);
+      world.pointOfView({ lat: point.latitude_deg, lng: point.longitude_deg, altitude: 1.2 }, 800);
+
       document.body.classList.add('panel-open');
-      setTimeout(() => { world.width(window.innerWidth / 2); }, 100);
+      
+      setTimeout(() => {
+        world.width(window.innerWidth / 2);
+      }, 50);
 
       document.getElementById('airport-name').innerText = `> ${point.name || 'UNKNOWN'}`;
       document.getElementById('airport-code').innerText = `${point.ident || '---'} / ${point.iata_code || '---'}`;
@@ -252,7 +214,9 @@
     function closePanel() {
       document.body.classList.remove('panel-open');
       world.controls().autoRotate = true;
-      setTimeout(() => { world.width(window.innerWidth); }, 100);
+      setTimeout(() => {
+        world.width(window.innerWidth);
+      }, 50);
       
       if(blueprintRenderer) {
         document.getElementById('blueprint-view').innerHTML = '';
@@ -265,6 +229,7 @@
       world.height(window.innerHeight);
     });
 
+    // MÔ PHỎNG BLUEPRINT 3D
     let blueprintScene, blueprintCamera, blueprintRenderer, reqAnim;
 
     function initBlueprint() {
@@ -276,24 +241,25 @@
       const w = container.clientWidth;
       const h = container.clientHeight;
       blueprintCamera = new THREE.PerspectiveCamera(45, w/h, 0.1, 1000);
-      blueprintCamera.position.set(0, 50, 50);
+      blueprintCamera.position.set(0, 45, 45);
       blueprintCamera.lookAt(0, 0, 0);
 
       blueprintRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
       blueprintRenderer.setSize(w, h);
       container.appendChild(blueprintRenderer.domElement);
 
-      const gridHelper = new THREE.GridHelper(100, 50, 0x00ff66, 0x003311);
+      const gridHelper = new THREE.GridHelper(80, 40, 0x00ff66, 0x003311);
       blueprintScene.add(gridHelper);
 
-      const geometry = new THREE.BoxGeometry(10, 0.5, 40); 
-      const material = new THREE.MeshBasicMaterial({ color: 0x00f3ff, wireframe: true, transparent: true, opacity: 0.8 });
-      const runwayMesh = new THREE.Mesh(geometry, material);
+      // Mô phỏng đường băng phẳng dạng lưới Wireframe
+      const runwayGeo = new THREE.BoxGeometry(8, 0.2, 45); 
+      const runwayMat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, wireframe: true });
+      const runwayMesh = new THREE.Mesh(runwayGeo, runwayMat);
       
-      const terminalGeo = new THREE.BoxGeometry(15, 5, 10);
+      const terminalGeo = new THREE.BoxGeometry(14, 4, 10);
       const terminalMat = new THREE.MeshBasicMaterial({ color: 0xff00ea, wireframe: true });
       const terminalMesh = new THREE.Mesh(terminalGeo, terminalMat);
-      terminalMesh.position.set(15, 2.5, 0);
+      terminalMesh.position.set(14, 2, 0);
       
       const group = new THREE.Group();
       group.add(runwayMesh);
