@@ -17,7 +17,7 @@
       --neon-magenta: #ff00ea;
       --neon-green: #00ff66;
       --bg-dark: #0a0a0f;
-      --hud-bg: rgba(10, 10, 15, 0.9);
+      --hud-bg: rgba(10, 10, 15, 0.92);
       --hud-border: 1px solid var(--neon-cyan);
     }
 
@@ -64,24 +64,12 @@
     .panel-content {
       padding: 30px; width: 100vw; max-width: 50vw; opacity: 0;
       transition: opacity 0.4s;
+      box-sizing: border-box;
     }
 
     body.panel-open #globe-container { width: 50%; }
     body.panel-open #side-panel { width: 50%; }
     body.panel-open .panel-content { opacity: 1; transition-delay: 0.3s; }
-
-    /* Tooltip Cyberpunk */
-    .aero-tooltip {
-      background: rgba(10, 10, 15, 0.95);
-      border: 1px solid var(--neon-cyan);
-      padding: 10px 14px;
-      border-radius: 2px;
-      box-shadow: 0 0 12px rgba(0, 243, 255, 0.4);
-      pointer-events: none;
-      font-size: 0.85rem;
-      line-height: 1.4;
-      color: #fff;
-    }
 
     #blueprint-view {
       width: 100%; height: 350px;
@@ -115,7 +103,7 @@
     <div id="side-panel">
       <div class="panel-content">
         <button class="close-btn" onclick="closePanel()">[ ESC / CLOSE ]</button>
-        <div class="hud-title" id="airport-name">SYSTEM READY...</div>
+        <div class="hud-title" id="airport-name">TERMINAL LOCKED</div>
         <p><strong>CODE:</strong> <span id="airport-code">---</span></p>
         <p><strong>ELEVATION:</strong> <span id="airport-elev">---</span> ft</p>
         <p><strong>COUNTRY/REGION:</strong> <span id="airport-region">---</span></p>
@@ -129,7 +117,7 @@
   <script>
     const globeContainer = document.getElementById('globe-container');
     
-    // Khởi tạo Globe với cấu hình tối giản, mượt mà nhất
+    // Tắt toàn bộ hover raycasting - Chỉ giữ lại rendering phẳng
     const world = Globe()(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
       .backgroundColor('#0a0a0f')
@@ -137,61 +125,44 @@
       .atmosphereColor('#00f3ff')
       .atmosphereAltitude(0.12)
       
-      // CẤU HÌNH ĐIỂM HOÀN TOÀN PHẲNG (KHÔNG CÓ CHIỀU CAO HÌNH TRỤ)
+      // Chấm phẳng sát bề mặt, không có độ cao hình trụ
       .pointLat('latitude_deg')
       .pointLng('longitude_deg')
-      .pointAltitude(0.001) // Cực sát mặt cầu, chấm hoàn toàn phẳng
+      .pointAltitude(0)
       .pointRadius('size')
-      .pointColor(d => d.type === 'large_airport' ? '#00f3ff' : '#00aa77')
-      .pointResolution(6)   // Đa giác cực thấp -> GPU xử lý siêu nhẹ
+      .pointColor(d => d.type === 'large_airport' ? '#00f3ff' : '#00ff88')
+      .pointResolution(4) // 4 cạnh (tối giản tuyệt đối cho GPU khi phóng to)
       
-      // SỰ KIỆN HOVER: Đã loại bỏ logic phức tạp, hover nhận ngay
-      .onPointHover(point => {
-        if (point) {
-          globeContainer.style.cursor = 'pointer';
-          world.tooltipContent(() => `
-            <div class="aero-tooltip">
-              <strong style="color:var(--neon-green)">${point.name}</strong><br>
-              <span style="color:#aaa">CODE:</span> ${point.iata_code || point.ident} | <span style="color:#aaa">TYPE:</span> ${point.type}<br>
-              <span style="color:#aaa">LOCATION:</span> ${point.municipality || 'N/A'}, ${point.iso_country}
-            </div>
-          `);
-        } else {
-          globeContainer.style.cursor = 'default';
-        }
-      })
+      // CHỈ BẮT SỰ KIỆN CLICK (KHÔNG DÙNG onPointHover NỮA)
       .onPointClick(point => {
         if (point) openPanel(point);
       });
 
-    // Quay cực chậm và chống rung giật
+    // Cấu hình quay chậm mượt mà
     world.controls().autoRotate = true;
-    world.controls().autoRotateSpeed = 0.15;
+    world.controls().autoRotateSpeed = 0.12;
     world.controls().enableDamping = true;
     world.controls().dampingFactor = 0.05;
 
-    // TẢI FILE CSV - LỌC TRIỆT ĐỂ ĐỂ KHÔNG BỊ TRÀN RAM
+    // Tải và chỉ lấy duy nhất sân bay Lớn + Vừa
     Papa.parse('airports.csv', {
       download: true,
       header: true,
       dynamicTyping: true,
       complete: function(results) {
-        // Chỉ giữ lại large và medium (LOẠI BỎ TOÀN BỘ small_airport, heliport, closed...)
         const cleanAirports = results.data.filter(d => 
           d.latitude_deg && d.longitude_deg &&
           (d.type === 'large_airport' || d.type === 'medium_airport')
         ).map(d => ({
           ...d,
-          // Sân bay lớn chấm to rõ, sân bay vừa chấm nhỏ tinh tế
-          size: d.type === 'large_airport' ? 0.35 : 0.15
+          size: d.type === 'large_airport' ? 0.35 : 0.18
         }));
 
-        console.log(`Loaded ${cleanAirports.length} commercial airports. System optimized.`);
         world.pointsData(cleanAirports);
       }
     });
 
-    // XỬ LÝ MỞ PANEL CHI TIẾT
+    // Mở Panel thông tin bên phải
     function openPanel(point) {
       world.controls().autoRotate = false;
       world.pointOfView({ lat: point.latitude_deg, lng: point.longitude_deg, altitude: 1.2 }, 800);
@@ -229,7 +200,7 @@
       world.height(window.innerHeight);
     });
 
-    // MÔ PHỎNG BLUEPRINT 3D
+    // Khởi tạo sa bàn Blueprint 3D
     let blueprintScene, blueprintCamera, blueprintRenderer, reqAnim;
 
     function initBlueprint() {
@@ -251,7 +222,7 @@
       const gridHelper = new THREE.GridHelper(80, 40, 0x00ff66, 0x003311);
       blueprintScene.add(gridHelper);
 
-      // Mô phỏng đường băng phẳng dạng lưới Wireframe
+      // Mô phỏng đường băng Wireframe
       const runwayGeo = new THREE.BoxGeometry(8, 0.2, 45); 
       const runwayMat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, wireframe: true });
       const runwayMesh = new THREE.Mesh(runwayGeo, runwayMat);
