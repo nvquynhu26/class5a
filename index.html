@@ -5,8 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>AEROVEXIS - Orbital Terminal Blueprints</title>
   
+  <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
   
+  <!-- Thư viện cần thiết -->
   <script src="https://unpkg.com/three"></script>
   <script src="https://unpkg.com/globe.gl"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
@@ -16,8 +18,8 @@
       --neon-cyan: #00f3ff;
       --neon-magenta: #ff00ea;
       --neon-green: #00ff66;
-      --bg-dark: #07070a;
-      --hud-bg: rgba(7, 7, 10, 0.9);
+      --bg-dark: #050508;
+      --hud-bg: rgba(5, 5, 8, 0.9);
       --hud-border: 1px solid rgba(0, 243, 255, 0.4);
     }
 
@@ -30,40 +32,53 @@
       overflow: hidden;
     }
 
+    /* HEADER HUD */
     #header {
       position: absolute; top: 25px; left: 35px; z-index: 10;
       pointer-events: none;
     }
     #header h1 {
       margin: 0; font-size: 2.2rem; letter-spacing: 5px;
-      text-shadow: 0 0 15px rgba(0, 243, 255, 0.5);
+      text-shadow: 0 0 12px rgba(0, 243, 255, 0.6);
     }
     #header p {
       margin: 5px 0 0 0; font-size: 0.85rem; color: #888;
-      text-transform: uppercase; letter-spacing: 2px;
+      text-transform: uppercase; letter-spacing: 3px;
     }
 
-    #layout-container { display: flex; width: 100%; height: 100%; }
-    
+    /* PRELOADER TỐI ƯU */
+    #loader {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 1.2rem; color: var(--neon-green);
+      z-index: 20; letter-spacing: 2px;
+      text-shadow: 0 0 8px var(--neon-green);
+      pointer-events: none;
+    }
+
+    /* BỐ CỤC CHIA ĐÔI */
+    #layout-container {
+      display: flex; width: 100%; height: 100%;
+    }
     #globe-container {
       width: 100%; height: 100%;
       transition: width 0.9s cubic-bezier(0.16, 1, 0.3, 1);
       position: relative;
     }
 
+    /* PANEL BÊN PHẢI (BLUEPRINT) */
     #side-panel {
       width: 0%; height: 100%;
       background: var(--hud-bg);
       border-left: var(--hud-border);
-      box-shadow: -10px 0 30px rgba(0, 0, 0, 0.8);
+      box-shadow: -10px 0 30px rgba(0, 243, 255, 0.1);
       transition: width 0.9s cubic-bezier(0.16, 1, 0.3, 1);
       display: flex; flex-direction: column;
-      overflow-y: auto; z-index: 5;
+      overflow: hidden; z-index: 5;
     }
-
     .panel-content {
-      padding: 40px; width: 100vw; max-width: 50vw; opacity: 0;
-      transition: opacity 0.5s ease-in-out;
+      padding: 40px; width: 100vw; max-width: 50vw;
+      opacity: 0; transition: opacity 0.4s ease;
       box-sizing: border-box;
     }
 
@@ -71,39 +86,51 @@
     body.panel-open #side-panel { width: 50%; }
     body.panel-open .panel-content { opacity: 1; transition-delay: 0.5s; }
 
-    /* Tooltip tối ưu tốc độ render CSS */
+    /* TOOLTIP HOVER */
     .aero-tooltip {
-      background: rgba(10, 10, 15, 0.95);
+      background: rgba(10, 10, 15, 0.85);
       border: 1px solid var(--neon-cyan);
-      padding: 12px 15px; border-radius: 2px;
-      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
-      font-size: 0.9rem; pointer-events: none;
-      transform: translateZ(0); /* Ép dùng GPU render tooltip */
+      padding: 12px 16px; border-radius: 2px;
+      box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
+      backdrop-filter: blur(5px);
+      font-size: 0.9rem; line-height: 1.4;
     }
+    .aero-tooltip .hl { color: var(--neon-green); font-size: 1.1rem; }
+    .aero-tooltip .hl-country { color: var(--neon-magenta); font-weight: bold; }
 
-    .hud-title {
-      font-size: 1.6rem; border-bottom: 1px solid rgba(0, 243, 255, 0.3);
-      padding-bottom: 12px; margin-bottom: 25px;
-      text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
-    }
-
-    .close-btn {
-      position: absolute; top: 25px; right: 30px;
-      background: transparent; color: #fff;
-      border: 1px solid #555; padding: 6px 18px; 
-      cursor: pointer; font-family: inherit; transition: all 0.2s;
-    }
-    .close-btn:hover { background: var(--neon-magenta); border-color: var(--neon-magenta); }
-
+    /* BLUEPRINT 3D CANVAS */
     #blueprint-view {
-      width: 100%; height: 40vh;
-      border: 1px solid rgba(0, 255, 102, 0.2);
+      width: 100%; height: 45vh;
+      border: 1px dashed rgba(0, 255, 102, 0.5);
       background: rgba(0, 255, 102, 0.02);
       margin-top: 20px; position: relative;
+    }
+    .hud-title {
+      font-size: 1.6rem; border-bottom: 1px solid rgba(0, 243, 255, 0.4);
+      padding-bottom: 12px; margin-bottom: 25px;
+      letter-spacing: 2px; text-transform: uppercase;
+    }
+    .data-row {
+      display: flex; justify-content: space-between;
+      border-bottom: 1px dotted rgba(255,255,255,0.1);
+      padding: 8px 0;
+    }
+    .close-btn {
+      position: absolute; top: 25px; right: 30px;
+      background: transparent; color: var(--neon-magenta);
+      border: 1px solid var(--neon-magenta);
+      padding: 8px 20px; cursor: pointer; font-family: inherit;
+      letter-spacing: 2px; transition: all 0.2s;
+    }
+    .close-btn:hover { 
+      background: rgba(255, 0, 234, 0.2); 
+      box-shadow: 0 0 15px rgba(255, 0, 234, 0.4); 
     }
   </style>
 </head>
 <body>
+
+  <div id="loader">INITIALIZING SATELLITE LINK...</div>
 
   <div id="header">
     <h1>AEROVEXIS</h1>
@@ -115,98 +142,121 @@
     
     <div id="side-panel">
       <div class="panel-content">
-        <button class="close-btn" onclick="closePanel()">CLOSE [X]</button>
+        <button class="close-btn" onclick="closePanel()">[ CLOSE ]</button>
         <div class="hud-title" id="airport-name">SYSTEM READY...</div>
         
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; color: #ccc;">
-          <p><span style="color:var(--neon-cyan)">IATA/ICAO:</span> <br><span id="airport-code" style="font-size:1.2rem; color:#fff">---</span></p>
-          <p><span style="color:var(--neon-cyan)">ELEVATION:</span> <br><span id="airport-elev" style="font-size:1.2rem; color:#fff">---</span> ft</p>
-          <p><span style="color:var(--neon-cyan)">CITY/REGION:</span> <br><span id="airport-city" style="color:#fff">---</span></p>
-          <p><span style="color:var(--neon-cyan)">COUNTRY:</span> <br><span id="airport-country" style="color:#fff">---</span></p>
+        <div class="data-row">
+          <span>COUNTRY CODE:</span> <strong id="airport-country" style="color: var(--neon-magenta)">---</strong>
+        </div>
+        <div class="data-row">
+          <span>IATA / ICAO:</span> <strong id="airport-code">---</strong>
+        </div>
+        <div class="data-row">
+          <span>ELEVATION:</span> <strong id="airport-elev">---</strong>
         </div>
         
         <div id="blueprint-view"></div>
-        <p style="color: var(--neon-green); font-size: 0.85rem; margin-top: 15px;">> ESTABLISHING SECURE CONNECTION TO TERMINAL SYSTEMS...</p>
+        
+        <div style="margin-top: 25px; font-size: 0.85rem; color: #888;">
+          <span style="color: var(--neon-green)">> AWAITING RUNWAY DATA...</span><br>
+          > LISTENING TO ATC FREQUENCIES...
+        </div>
       </div>
     </div>
   </div>
 
   <script>
+    // 1. KHỞI TẠO QUẢ ĐỊA CẦU TỐI ƯU
     const globeContainer = document.getElementById('globe-container');
-    
-    // 1. KHỞI TẠO QUẢ CẦU VỚI CẤU HÌNH TỐI ƯU
-    const world = Globe({ animateIn: false })(globeContainer)
+    const world = Globe()(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
-      .backgroundColor('#07070a')
+      .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
+      .backgroundColor('#050508')
       .pointAltitude(0.01)
       .pointColor(() => '#00f3ff')
-      .pointResolution(12) // TỐI ƯU: Giảm poly của điểm để tăng FPS
+      .pointResolution(16) // Hạ phân giải điểm xuống 16 để tránh lag GPU
       .showAtmosphere(true)
       .atmosphereColor('#00f3ff')
-      .atmosphereAltitude(0.15)
+      .atmosphereAltitude(0.12)
       .onPointHover(point => {
         if (point) {
           globeContainer.style.cursor = 'crosshair';
-          // Tương tác hover: Hiện thông tin cơ bản của khu vực/quốc gia
           world.tooltipContent(() => `
             <div class="aero-tooltip">
-              <strong style="color:var(--neon-magenta); font-size:1.1em;">${point.name}</strong><br>
-              <span style="color:#888">City:</span> ${point.municipality || 'Unknown'}<br>
-              <span style="color:#888">Region ID:</span> ${point.iso_region}<br>
-              <span style="color:#888">Country Code:</span> <strong style="color:var(--neon-green)">${point.iso_country}</strong>
+              <span class="hl">${point.name}</span><br>
+              <hr style="border:0; border-top:1px solid #333; margin: 6px 0;">
+              Country: <span class="hl-country">${point.iso_country}</span><br>
+              Region: ${point.iso_region}<br>
+              Type: ${point.type.replace('_', ' ').toUpperCase()}
             </div>
           `);
         } else {
-          globeContainer.style.cursor = 'default';
+          globeContainer.style.cursor = 'grab';
         }
       })
       .onPointClick(point => {
         openPanel(point);
       });
 
-    // TỐI ƯU: Cho trái đất quay thật chậm theo yêu cầu (0.1 thay vì 0.5)
+    // Tốc độ quay rất chậm tạo cảm giác sci-fi
     world.controls().autoRotate = true;
-    world.controls().autoRotateSpeed = 0.1;
-    world.controls().enableDamping = true; // Cảm giác mượt khi dùng chuột kéo
+    world.controls().autoRotateSpeed = 0.2;
+    world.controls().enableDamping = true; // Thêm quán tính để rê chuột mượt hơn
+    world.controls().dampingFactor = 0.05;
 
-    // 2. PARSE DATA BẰNG WEB WORKER (CHỐNG LAG)
+    // 2. PARSE DATA VỚI WORKER ĐỂ KHÔNG ĐƠ TRÌNH DUYỆT
     Papa.parse('airports.csv', {
       download: true,
       header: true,
       dynamicTyping: true,
-      worker: true, // TỐI ƯU: Chạy nền không làm đơ trang
+      worker: true, // Chạy đa luồng, tối ưu tốc độ tải
       complete: function(results) {
-        // Chỉ lấy sân bay thương mại và có toạ độ hợp lệ để tránh rác dữ liệu
-        const filtered = results.data.filter(d => 
-          d.latitude_deg && d.longitude_deg && 
-          (d.type === 'large_airport' || d.type === 'medium_airport')
+        document.getElementById('loader').style.display = 'none';
+        
+        // BỘ LỌC TỐI ƯU: Bỏ trực thăng, bỏ sân bay đóng cửa
+        const filteredAirports = results.data.filter(d => 
+          d.latitude_deg && 
+          d.longitude_deg && 
+          d.type !== 'closed' && 
+          d.type !== 'heliport'
         );
 
-        const mappedData = filtered.map(d => ({
-          lat: d.latitude_deg,
-          lng: d.longitude_deg,
-          size: d.type === 'large_airport' ? 0.3 : 0.12,
-          ...d
-        }));
+        const mappedData = filteredAirports.map(d => {
+          let pointSize = 0.05; // Sân bay nhỏ
+          if (d.type === 'large_airport') pointSize = 0.25;
+          if (d.type === 'medium_airport') pointSize = 0.12;
+
+          return {
+            lat: d.latitude_deg,
+            lng: d.longitude_deg,
+            size: pointSize,
+            ...d
+          };
+        });
 
         world.pointsData(mappedData).pointRadius('size');
+      },
+      error: function() {
+        document.getElementById('loader').innerText = "ERROR: OFFLINE MODE. RUN ON LOCAL SERVER.";
+        document.getElementById('loader').style.color = "red";
       }
     });
 
-    // 3. LOGIC UI
+    // 3. LOGIC UI (MƯỢT MÀ)
     function openPanel(point) {
       world.controls().autoRotate = false;
-      // Di chuyển camera đến điểm click (cận cảnh)
-      world.pointOfView({ lat: point.lat, lng: point.lng, altitude: 0.6 }, 1000);
+      // Bay camera đến điểm đó
+      world.pointOfView({ lat: point.lat, lng: point.lng, altitude: 0.6 }, 1200);
 
       document.body.classList.add('panel-open');
       
+      // Khớp resize canvas địa cầu
       setTimeout(() => { world.width(window.innerWidth / 2); }, 50);
 
-      document.getElementById('airport-name').innerText = `> ${point.name}`;
-      document.getElementById('airport-code').innerText = `${point.iata_code || 'N/A'} / ${point.ident || 'N/A'}`;
-      document.getElementById('airport-elev').innerText = point.elevation_ft || '0';
-      document.getElementById('airport-city').innerText = point.municipality || 'N/A';
+      // Cập nhật text HUD
+      document.getElementById('airport-name').innerText = point.name || 'UNKNOWN';
+      document.getElementById('airport-code').innerText = `${point.iata_code || 'N/A'} / ${point.ident}`;
+      document.getElementById('airport-elev').innerText = point.elevation_ft ? `${point.elevation_ft} FT` : 'N/A';
       document.getElementById('airport-country').innerText = point.iso_country || 'N/A';
 
       initBlueprint();
@@ -215,81 +265,70 @@
     function closePanel() {
       document.body.classList.remove('panel-open');
       world.controls().autoRotate = true;
+      
       setTimeout(() => { world.width(window.innerWidth); }, 50);
       
-      disposeBlueprint();
+      if(blueprintRenderer) {
+        cancelAnimationFrame(reqAnim);
+        document.getElementById('blueprint-view').innerHTML = '';
+      }
     }
 
     window.addEventListener('resize', () => {
-      world.width(document.body.classList.contains('panel-open') ? window.innerWidth / 2 : window.innerWidth);
+      if(document.body.classList.contains('panel-open')) {
+        world.width(window.innerWidth / 2);
+      } else {
+        world.width(window.innerWidth);
+      }
       world.height(window.innerHeight);
     });
 
-    // 4. HỆ THỐNG BLUEPRINT 3D & QUẢN LÝ BỘ NHỚ
-    let bpScene, bpCamera, bpRenderer, bpReqAnim;
-    let bpGeometries = [], bpMaterials = []; // Mảng lưu trữ để dọn dẹp RAM
+    // 4. HỆ THỐNG RENDER BLUEPRINT 3D
+    let blueprintScene, blueprintCamera, blueprintRenderer, reqAnim;
 
     function initBlueprint() {
-      disposeBlueprint(); // Xoá cảnh cũ nếu có trước khi render cảnh mới
-
       const container = document.getElementById('blueprint-view');
+      container.innerHTML = ''; 
+      cancelAnimationFrame(reqAnim);
+
+      blueprintScene = new THREE.Scene();
+      
       const w = container.clientWidth;
       const h = container.clientHeight;
+      blueprintCamera = new THREE.PerspectiveCamera(50, w/h, 0.1, 1000);
+      blueprintCamera.position.set(0, 40, 60);
+      blueprintCamera.lookAt(0, 0, 0);
 
-      bpScene = new THREE.Scene();
-      bpCamera = new THREE.PerspectiveCamera(40, w/h, 0.1, 1000);
-      bpCamera.position.set(0, 40, 60);
-      bpCamera.lookAt(0, 0, 0);
+      blueprintRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+      blueprintRenderer.setSize(w, h);
+      container.appendChild(blueprintRenderer.domElement);
 
-      bpRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-      bpRenderer.setSize(w, h);
-      container.appendChild(bpRenderer.domElement);
+      const gridHelper = new THREE.GridHelper(100, 40, 0x00ff66, 0x002211);
+      blueprintScene.add(gridHelper);
 
-      // Lưới mặt đất
-      const gridHelper = new THREE.GridHelper(80, 40, 0x00ff66, 0x002211);
-      bpScene.add(gridHelper);
+      // Nhóm đối tượng để xoay quanh tâm dễ hơn
+      const terminalGroup = new THREE.Group();
 
-      // Tạo một group để xoay toàn bộ cụm sân bay
-      const airportGroup = new THREE.Group();
-      bpScene.add(airportGroup);
-
-      // Dải đường băng (Mô phỏng)
-      const rwGeo = new THREE.BoxGeometry(8, 0.5, 45);
-      const rwMat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, wireframe: true, transparent: true, opacity: 0.7 });
-      const rwMesh = new THREE.Mesh(rwGeo, rwMat);
-      airportGroup.add(rwMesh);
+      // Dựng hình khối Wireframe phong cách kỹ thuật
+      const rwGeo = new THREE.BoxGeometry(8, 0.5, 45); 
+      const rwMat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, wireframe: true, transparent: true, opacity: 0.6 });
+      const runway = new THREE.Mesh(rwGeo, rwMat);
       
-      // Nhà ga (Mô phỏng)
-      const termGeo = new THREE.BoxGeometry(12, 4, 8);
-      const termMat = new THREE.MeshBasicMaterial({ color: 0xff00ea, wireframe: true });
-      const termMesh = new THREE.Mesh(termGeo, termMat);
-      termMesh.position.set(12, 2, 0);
-      airportGroup.add(termMesh);
+      const buildGeo = new THREE.BoxGeometry(12, 4, 8);
+      const buildMat = new THREE.MeshBasicMaterial({ color: 0xff00ea, wireframe: true, transparent: true, opacity: 0.8 });
+      const building = new THREE.Mesh(buildGeo, buildMat);
+      building.position.set(15, 2, 0);
 
-      // Đẩy vào mảng để quản lý dọn rác
-      bpGeometries.push(rwGeo, termGeo);
-      bpMaterials.push(rwMat, termMat);
+      terminalGroup.add(runway);
+      terminalGroup.add(building);
+      blueprintScene.add(terminalGroup);
 
       function animate() {
-        bpReqAnim = requestAnimationFrame(animate);
-        airportGroup.rotation.y += 0.003; // Quay cụm khối 3D chầm chậm
-        bpRenderer.render(bpScene, bpCamera);
+        reqAnim = requestAnimationFrame(animate);
+        terminalGroup.rotation.y += 0.003; // Quay mượt, chậm
+        blueprintRenderer.render(blueprintScene, blueprintCamera);
       }
       animate();
-    }
-
-    // TỐI ƯU: Hàm giải phóng GPU (chống Memory Leak)
-    function disposeBlueprint() {
-      if(bpReqAnim) cancelAnimationFrame(bpReqAnim);
-      if(bpRenderer) {
-        bpGeometries.forEach(geo => geo.dispose());
-        bpMaterials.forEach(mat => mat.dispose());
-        bpGeometries = []; bpMaterials = [];
-        
-        bpRenderer.dispose();
-        const container = document.getElementById('blueprint-view');
-        if(container) container.innerHTML = '';
-      }
     }
   </script>
 </body>
