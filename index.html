@@ -44,7 +44,6 @@
       letter-spacing: 1px;
     }
 
-    /* FILTER GROUP */
     #filter-group {
       position: absolute; top: 75px; left: 25px; z-index: 30;
       display: flex; gap: 6px; pointer-events: auto;
@@ -68,7 +67,6 @@
       box-shadow: 0 0 10px rgba(0, 255, 102, 0.4);
     }
 
-    /* TOP BAR CONTROLS */
     #top-bar {
       position: absolute; top: 15px; right: 25px; z-index: 40;
       display: flex; flex-direction: row; align-items: center; gap: 12px;
@@ -133,7 +131,6 @@
       position: relative;
     }
 
-    /* SIDE PANEL */
     #side-panel {
       width: 0%; height: 100%;
       background: var(--hud-bg); border-left: var(--hud-border);
@@ -177,15 +174,6 @@
     .route-card {
       border: 1px solid #334455; padding: 12px; margin-bottom: 12px;
       background: rgba(0, 0, 0, 0.5); font-size: 0.85rem; line-height: 1.5;
-    }
-
-    /* CLASSIFIED HUD OVERLAY CHO QUÂN SỰ */
-    .classified-box {
-      border: 1px solid var(--neon-red);
-      background: rgba(255, 42, 42, 0.08);
-      color: var(--neon-red);
-      padding: 15px; text-align: center; font-size: 0.9rem;
-      letter-spacing: 2px; line-height: 1.6;
     }
   </style>
 </head>
@@ -238,7 +226,6 @@
       <div class="panel-content">
         <button class="close-btn" onclick="closePanel()">[ ESC / CLOSE ]</button>
         
-        <!-- AIRPORT VIEW -->
         <div id="airport-details-view">
           <div class="hud-title" id="airport-name">TERMINAL LOCKED</div>
           <p><strong>CODE:</strong> <span id="airport-code">---</span></p>
@@ -255,7 +242,6 @@
           <div class="status-text" id="blueprint-status">> RUNWAY VECTOR BLUEPRINT LOADED [TRUE SCALE]</div>
         </div>
 
-        <!-- ROUTE VIEW -->
         <div id="itinerary-view">
           <div class="hud-title" id="itinerary-title" style="color:var(--neon-green);">ROUTE PATHFINDER RESULTS</div>
           <p id="itinerary-subtitle" style="color:#aaa; font-size:0.85rem; margin-top:-8px;">SELECT AN ITINERARY BELOW</p>
@@ -280,7 +266,7 @@
     let isRouteMode = false;
     let currentCategory = 'all';
 
-    // 1. GLOBE INITIALIZATION (CHẤM TRÒN MỊN + ĐƯỜNG BAY 1PX TỈ LỆ 2:1 CHẠY CHẬM)
+    // 1. KHỞI TẠO ĐỊA CẦU
     const world = Globe()(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
       .backgroundColor('#0a0a0f')
@@ -307,14 +293,12 @@
         if (connectedAirportIds.has(d.iata_code) || connectedAirportIds.has(d.ident)) return '#00f3ff';
         return 'rgba(40, 40, 60, 0.2)';
       })
-      .pointResolution(30) // TĂNG LÊN 30 ĐỂ ĐIỂM HOÀN TOÀN TRÒN MỊN (KHÔNG BỊ HÌNH NGŨ GIÁC)
-      
-      // ĐƯỜNG BAY: MỎNG 1PX, TỈ LỆ 2:1, KHOẢNG CÁCH NGẮN, TỐC ĐỘ CHẬM
+      .pointResolution(30)
       .arcColor(d => d.color || ['rgba(0, 243, 255, 0.9)', 'rgba(255, 0, 127, 0.9)'])
-      .arcStroke(0.1) // SIÊU MỎNG 1PX
-      .arcDashLength(0.2) // TỈ LỆ NÉT 2
-      .arcDashGap(0.1)    // TỈ LỆ KHOẢNG TRỐNG 1 (NGẮN GỌN)
-      .arcDashAnimateTime(4500) // DI CHUYỂN CHẬM VÀ MƯỢT HƠN (4.5 GIÂY)
+      .arcStroke(0.1)
+      .arcDashLength(0.2)
+      .arcDashGap(0.1)
+      .arcDashAnimateTime(4500)
       .arcAltitude(d => {
         const φ1 = d.startLat * Math.PI / 180;
         const φ2 = d.endLat * Math.PI / 180;
@@ -333,7 +317,7 @@
     world.controls().minDistance = 115;
     world.controls().maxDistance = 240;
 
-    // 2. DATA PIPELINE
+    // 2. TẢI DỮ LIỆU
     Promise.all([
       fetchCSV('countries.csv'),
       fetchCSV('airports.csv'),
@@ -349,7 +333,6 @@
         const nameLower = (a.name || '').toLowerCase();
         const typeLower = (a.type || '').toLowerCase();
         
-        // Nhận diện sân bay quân sự chính xác
         const isMilitary = nameLower.includes('air base') || 
                            nameLower.includes('afb') || 
                            nameLower.includes('military') || 
@@ -513,7 +496,7 @@
       });
     }
 
-    // 4. ROUTE PATHFINDER (100% ENGLISH)
+    // 4. ROUTE PATHFINDER
     const OPTION_COLORS = ['#00f3ff', '#ff00ea', '#ffe600', '#00ff66', '#ff7700', '#b026ff'];
 
     function resolveAirports(queryStr) {
@@ -601,7 +584,6 @@
         }
       }
 
-      // THÔNG BÁO BẰNG TIẾNG ANH NẾU KHÔNG CÓ DỮ LIỆU CHUYẾN BAY
       if (foundOptions.length === 0) {
         alert("NO FLIGHT ROUTE DATA AVAILABLE FOR THIS CITY PAIR.");
         return;
@@ -661,7 +643,7 @@
       world.pointOfView({ lat: firstLegStart.latitude_deg, lng: firstLegStart.longitude_deg, altitude: 1.2 }, 1000);
     }
 
-    // 5. CHỌN SÂN BAY & BẢO MẬT MILITARY BLUEPRINT
+    // 5. CHỌN SÂN BAY
     function handleAirportSelect(point) {
       isRouteMode = false;
       selectedAirportId = point.ident;
@@ -717,10 +699,11 @@
       document.getElementById('airport-municipality').innerText = point.municipality || 'N/A';
       document.getElementById('airport-routes').innerText = `${routeCount} Connections`;
 
+      // Đợi layout resize xong rồi gọi hàm vẽ Blueprint
       setTimeout(() => {
         world.width(window.innerWidth / 2);
         drawRunwayBlueprint2D(point);
-      }, 400);
+      }, 350);
     }
 
     function closePanel() {
@@ -743,14 +726,14 @@
       world.height(window.innerHeight);
     });
 
-    // 6. BLUEPRINT LOGIC: BẢO MẬT QUÂN SỰ + KIỂM TRA ĐA TẦNG CHO SÂN BAY DÂN DỤNG
+    // 6. THUẬT TOÁN VẼ RUNWAY VECTOR BLUEPRINT TRIỆT TIÊU LỖI MÀN HÌNH ĐEN
     function drawRunwayBlueprint2D(airport) {
       const canvas = document.getElementById('blueprint-canvas');
       const container = document.getElementById('blueprint-container');
       const statusText = document.getElementById('blueprint-status');
       
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
+      canvas.width = container.clientWidth || 400;
+      canvas.height = container.clientHeight || 320;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
@@ -758,13 +741,12 @@
       const cy = canvas.height / 2;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // YÊU CẦU 1: NẾU LÀ MILITARY AIRBASE -> HIỂN THỊ BẢO MẬT / CLASSIFIED
+      // A. NẾU LÀ MILITARY AIRBASE -> HIỂN THỊ BẢO MẬT TUYỆT ĐỐI
       if (airport.isMilitary) {
         document.getElementById('airport-rws-count').innerText = `RESTRICTED`;
         statusText.innerText = `> ACCESS DENIED: CLASSIFIED MILITARY ASSET`;
         statusText.style.color = `var(--neon-red)`;
 
-        // Radar cảnh báo đỏ
         ctx.strokeStyle = 'rgba(255, 42, 42, 0.25)';
         ctx.lineWidth = 1;
         [50, 95, 140].forEach(r => {
@@ -773,11 +755,10 @@
           ctx.stroke();
         });
 
-        // Hộp thông báo Classified
         ctx.strokeStyle = '#ff2a2a';
         ctx.lineWidth = 1.5;
         ctx.strokeRect(cx - 150, cy - 45, 300, 90);
-        ctx.fillStyle = 'rgba(255, 42, 42, 0.1)';
+        ctx.fillStyle = 'rgba(255, 42, 42, 0.12)';
         ctx.fillRect(cx - 150, cy - 45, 300, 90);
 
         ctx.fillStyle = '#ff2a2a';
@@ -790,10 +771,11 @@
         return;
       }
 
+      // B. SÂN BAY DÂN DỤNG
       statusText.style.color = `var(--neon-green)`;
       statusText.innerText = `> RUNWAY VECTOR BLUEPRINT LOADED [TRUE SCALE]`;
 
-      // Radar Circles tiêu chuẩn cho sân bay dân dụng
+      // Radar circles
       ctx.strokeStyle = 'rgba(0, 243, 255, 0.15)';
       ctx.lineWidth = 1;
       [50, 95, 140].forEach(r => {
@@ -802,6 +784,7 @@
         ctx.stroke();
       });
 
+      // La bàn chỉ hướng
       ctx.beginPath();
       ctx.moveTo(cx, cy - 150); ctx.lineTo(cx, cy + 150);
       ctx.moveTo(cx - 150, cy); ctx.lineTo(cx + 150, cy);
@@ -814,163 +797,97 @@
       ctx.fillText('E', cx + 152, cy + 4);
       ctx.fillText('W', cx - 162, cy + 4);
 
-      // YÊU CẦU 2: ĐỐI SOÁT ĐA TẦNG CHO SÂN BAY DÂN DỤNG (ident, iata, id)
-      let rawRws = runwaysList.filter(r => 
-        (r.airport_ident && (r.airport_ident === airport.ident || r.airport_ident === airport.iata_code)) ||
-        (r.airport_ref && airport.id && String(r.airport_ref) === String(airport.id))
-      );
+      // LỌC DỮ LIỆU ĐƯỜNG BĂNG ĐỐI SOÁT ĐA TẦNG
+      const targetIdent = (airport.ident || '').toUpperCase();
+      const targetIata = (airport.iata_code || '').toUpperCase();
+      const targetId = airport.id ? String(airport.id) : null;
 
-      // Nếu vẫn không có trong runways.csv nhưng là sân bay lớn/vừa, tự động tạo đường băng đại diện
+      let rawRws = runwaysList.filter(r => {
+        const rIdent = (r.airport_ident || '').toUpperCase();
+        const rRef = r.airport_ref ? String(r.airport_ref) : null;
+        return (rIdent === targetIdent || (targetIata && rIdent === targetIata) || (targetId && rRef === targetId));
+      });
+
+      // Nếu không có, tạo đường băng mặc định theo quy mô sân bay
       if (rawRws.length === 0) {
-        if (airport.type === 'large_airport' || airport.type === 'medium_airport') {
-          rawRws = [
-            { heading_degT: 70, length_ft: 10500, width_ft: 150, le_ident: '07', he_ident: '25' }
-          ];
-          if (airport.type === 'large_airport') {
-            rawRws.push({ heading_degT: 70, length_ft: 12000, width_ft: 150, le_ident: '07L', he_ident: '25R' });
-          }
+        rawRws = [{ heading_degT: 70, length_ft: 9500, width_ft: 150, le_ident: '07', he_ident: '25' }];
+        if (airport.type === 'large_airport') {
+          rawRws.push({ heading_degT: 70, length_ft: 11000, width_ft: 150, le_ident: '07L', he_ident: '25R' });
         }
       }
 
       document.getElementById('airport-rws-count').innerText = `${rawRws.length} Runway(s)`;
 
-      const parsedRunways = rawRws.map(r => {
+      // CHUẨN HÓA VÀ VẼ RUNWAYS
+      // Nhóm theo góc song song để tách offset nếu có nhiều runway
+      const headingGroups = {};
+
+      rawRws.forEach((r, idx) => {
         let heading = r.heading_degT;
         if (heading === null || heading === undefined || isNaN(heading)) {
           const numMatch = (r.le_ident || '').match(/\d+/);
           heading = numMatch ? parseInt(numMatch[0], 10) * 10 : 70;
         }
-        return {
-          ...r,
-          computedHeading: heading,
-          baseAngle: Math.round(heading % 180)
-        };
+        const base = Math.round(heading % 180);
+        if (!headingGroups[base]) headingGroups[base] = [];
+        headingGroups[base].push({ ...r, headingDeg: heading, originalIndex: idx });
       });
 
-      const hasRealCoords = parsedRunways.some(r => r.le_latitude_deg && r.he_latitude_deg);
+      Object.values(headingGroups).forEach(group => {
+        const total = group.length;
 
-      if (hasRealCoords) {
-        const refLat = airport.latitude_deg * (Math.PI / 180);
-        const METERS_PER_DEG_LAT = 111320;
-        const METERS_PER_DEG_LON = 111320 * Math.cos(refLat);
+        group.forEach((r, idxInGroup) => {
+          // Tính chiều dài chuẩn hóa pixel
+          const lengthPx = Math.min(Math.max((r.length_ft || 7500) / 45, 140), 250);
+          const widthPx = Math.max((r.width_ft || 150) / 14, 10);
+          const rad = (r.headingDeg * Math.PI) / 180;
 
-        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-
-        const projected = parsedRunways.map(r => {
-          let leX = 0, leY = 0, heX = 0, heY = 0;
-          if (r.le_latitude_deg && r.he_latitude_deg) {
-            leX = (r.le_longitude_deg - airport.longitude_deg) * METERS_PER_DEG_LON;
-            leY = (r.le_latitude_deg - airport.latitude_deg) * METERS_PER_DEG_LAT;
-            heX = (r.he_longitude_deg - airport.longitude_deg) * METERS_PER_DEG_LON;
-            heY = (r.he_latitude_deg - airport.latitude_deg) * METERS_PER_DEG_LAT;
-          } else {
-            const len = (r.length_ft || 8000) * 0.3048;
-            const rad = (r.computedHeading * Math.PI) / 180;
-            leX = -(len / 2) * Math.sin(rad);
-            leY = -(len / 2) * Math.cos(rad);
-            heX = (len / 2) * Math.sin(rad);
-            heY = (len / 2) * Math.cos(rad);
+          // Phân cách offset song song
+          let offset = 0;
+          const ident = (r.le_ident || '').toUpperCase();
+          if (ident.includes('L')) offset = -35;
+          else if (ident.includes('R')) offset = 35;
+          else if (ident.includes('C')) offset = 0;
+          else if (total > 1) {
+            offset = (idxInGroup - (total - 1) / 2) * 40;
           }
 
-          minX = Math.min(minX, leX, heX);
-          maxX = Math.max(maxX, leX, heX);
-          minY = Math.min(minY, leY, heY);
-          maxY = Math.max(maxY, leY, heY);
+          const offX = offset * Math.cos(rad);
+          const offY = offset * Math.sin(rad);
 
-          return { ...r, leX, leY, heX, heY };
+          ctx.save();
+          ctx.translate(cx + offX, cy + offY);
+          ctx.rotate(rad);
+
+          // Thân đường băng
+          ctx.fillStyle = 'rgba(0, 243, 255, 0.25)';
+          ctx.strokeStyle = '#00f3ff';
+          ctx.lineWidth = 1.5;
+          ctx.fillRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
+          ctx.strokeRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
+
+          // Vạch kẻ tim đường băng màu vàng neon
+          ctx.strokeStyle = '#ffe600';
+          ctx.lineWidth = 1.2;
+          ctx.setLineDash([5, 5]);
+          ctx.beginPath();
+          ctx.moveTo(0, -lengthPx / 2 + 10);
+          ctx.lineTo(0, lengthPx / 2 - 10);
+          ctx.stroke();
+          ctx.setLineDash([]);
+
+          // Số hiệu hai đầu đường băng
+          ctx.fillStyle = '#ffffff';
+          ctx.font = 'bold 9px "Share Tech Mono"';
+          ctx.textAlign = 'center';
+          const leLabel = r.le_ident || '';
+          const heLabel = r.he_ident || '';
+          if (leLabel) ctx.fillText(leLabel, 0, lengthPx / 2 - 6);
+          if (heLabel) ctx.fillText(heLabel, 0, -lengthPx / 2 + 13);
+
+          ctx.restore();
         });
-
-        const spanX = Math.max(maxX - minX, 800);
-        const spanY = Math.max(maxY - minY, 800);
-        const scale = 220 / Math.max(spanX, spanY);
-
-        const midX = (minX + maxX) / 2;
-        const midY = (minY + maxY) / 2;
-
-        projected.forEach(r => {
-          const p1x = cx + (r.leX - midX) * scale;
-          const p1y = cy - (r.leY - midY) * scale;
-          const p2x = cx + (r.heX - midX) * scale;
-          const p2y = cy - (r.heY - midY) * scale;
-
-          drawRunwayBetweenPoints(ctx, p1x, p1y, p2x, p2y, r.le_ident, r.he_ident);
-        });
-
-      } else {
-        const groups = {};
-        parsedRunways.forEach(r => {
-          if (!groups[r.baseAngle]) groups[r.baseAngle] = [];
-          groups[r.baseAngle].push(r);
-        });
-
-        Object.values(groups).forEach(group => {
-          const total = group.length;
-
-          group.forEach((r, idx) => {
-            const lengthPx = Math.min(Math.max((r.length_ft || 6500) / 45, 120), 240);
-            const widthPx = Math.max((r.width_ft || 150) / 14, 8);
-            const rad = (r.computedHeading * Math.PI) / 180;
-
-            let offset = 0;
-            const ident = (r.le_ident || '').toUpperCase();
-
-            if (ident.includes('L')) offset = -35;
-            else if (ident.includes('R')) offset = 35;
-            else if (ident.includes('C')) offset = 0;
-            else if (total > 1) {
-              offset = (idx - (total - 1) / 2) * 40;
-            }
-
-            const offX = offset * Math.cos(rad);
-            const offY = offset * Math.sin(rad);
-
-            ctx.save();
-            ctx.translate(cx + offX, cy + offY);
-            ctx.rotate(rad);
-
-            drawRunwayBody(ctx, widthPx, lengthPx, r.le_ident, r.he_ident);
-            ctx.restore();
-          });
-        });
-      }
-    }
-
-    function drawRunwayBody(ctx, widthPx, lengthPx, leIdent, heIdent) {
-      ctx.fillStyle = 'rgba(0, 243, 255, 0.2)';
-      ctx.strokeStyle = '#00f3ff';
-      ctx.lineWidth = 1.5;
-      ctx.fillRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
-      ctx.strokeRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
-
-      ctx.strokeStyle = '#ffe600';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([5, 5]);
-      ctx.beginPath();
-      ctx.moveTo(0, -lengthPx / 2 + 8);
-      ctx.lineTo(0, lengthPx / 2 - 8);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.fillStyle = '#ffffff';
-      ctx.font = 'bold 9px "Share Tech Mono"';
-      ctx.textAlign = 'center';
-      if (leIdent) ctx.fillText(leIdent, 0, lengthPx / 2 - 6);
-      if (heIdent) ctx.fillText(heIdent, 0, -lengthPx / 2 + 12);
-    }
-
-    function drawRunwayBetweenPoints(ctx, x1, y1, x2, y2, leIdent, heIdent) {
-      const dx = x2 - x1;
-      const dy = y2 - y1;
-      const length = Math.sqrt(dx * dx + dy * dy);
-      const angle = Math.atan2(dy, dx);
-      const widthPx = 9;
-
-      ctx.save();
-      ctx.translate((x1 + x2) / 2, (y1 + y2) / 2);
-      ctx.rotate(angle - Math.PI / 2);
-
-      drawRunwayBody(ctx, widthPx, length, leIdent, heIdent);
-      ctx.restore();
+      });
     }
   </script>
 </body>
