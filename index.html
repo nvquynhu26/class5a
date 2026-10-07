@@ -1,22 +1,17 @@
-// HÀM VẼ RUNWAY BLUEPRINT NÂNG CẤP: KHẮC PHỤC TRIỆT ĐỂ LỖI KHÔNG TÌM THẤY ĐƯỜNG BĂNG
 function drawRunwayBlueprint2D(airport) {
-  const container = document.getElementById('blueprint-container');
   const canvas = document.getElementById('blueprint-canvas');
+  const container = document.getElementById('blueprint-container');
   
-  // Đảm bảo lấy đúng kích thước thật kể cả khi container đang animate
-  const w = container.clientWidth || 360;
-  const h = container.clientHeight || 320;
-  canvas.width = w;
-  canvas.height = h;
-
+  canvas.width = container.clientWidth;
+  canvas.height = container.clientHeight;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
-  const cx = w / 2;
-  const cy = h / 2;
-  ctx.clearRect(0, 0, w, h);
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // 1. Vẽ vòng tròn Radar tọa độ
+  // 1. Vẽ vòng tròn Radar & Trục la bàn
   ctx.strokeStyle = 'rgba(0, 243, 255, 0.15)';
   ctx.lineWidth = 1;
   [50, 95, 140].forEach(r => {
@@ -37,74 +32,64 @@ function drawRunwayBlueprint2D(airport) {
   ctx.fillText('E', cx + 152, cy + 4);
   ctx.fillText('W', cx - 162, cy + 4);
 
-  // 2. TÌM KIẾM ĐA ĐIỀU KIỆN (Bắt cả ident, id, gps_code và iata_code để không bao giờ bị sót)
-  const airportIdNum = Number(airport.id);
+  // 2. KHỚP KÉP NÂNG CAO (DUAL-KEY MATCHING):
+  // So khớp cả airport_ident, airport_ref (ID số), và mã IATA/ICAO, đồng thời dọn sạch khoảng trắng
+  const targetIdent = cleanStr(airport.ident);
+  const targetId = airport.id ? String(airport.id).trim() : null;
+  const targetIata = cleanStr(airport.iata_code);
+
   const rawRws = runwaysList.filter(r => {
-    if (!r) return false;
-    const matchIdent = r.airport_ident && (r.airport_ident === airport.ident || r.airport_ident === airport.gps_code || r.airport_ident === airport.iata_code);
-    const matchRef = r.airport_ref && Number(r.airport_ref) === airportIdNum;
-    return matchIdent || matchRef;
+    const rwIdent = cleanStr(r.airport_ident);
+    const rwRef = r.airport_ref ? String(r.airport_ref).trim() : null;
+
+    return (targetIdent && rwIdent === targetIdent) ||
+           (targetId && rwRef === targetId) ||
+           (targetIata && rwIdent === targetIata);
   });
 
   document.getElementById('airport-rws-count').innerText = `${rawRws.length} Runway(s)`;
 
   if (rawRws.length === 0) {
-    ctx.fillStyle = '#ff7700';
+    ctx.fillStyle = '#888';
     ctx.font = '12px "Share Tech Mono"';
     ctx.textAlign = 'center';
-    ctx.fillText('> NO RUNWAY GEOMETRY LINKED IN DATASET', cx, cy - 10);
-    ctx.fillStyle = '#888';
-    ctx.font = '10px "Share Tech Mono"';
-    ctx.fillText(`(Searched IDENT: ${airport.ident} | REF: ${airport.id})`, cx, cy + 12);
+    ctx.fillText('> NO RUNWAY GEOMETRY DATA AVAILABLE', cx, cy);
     return;
   }
 
-  // 3. Chuẩn hóa góc quay và dữ liệu số
+  // 3. Chuẩn hóa góc hướng (Heading) và số liệu
   const parsedRunways = rawRws.map(r => {
-    let heading = Number(r.heading_degT);
-    if (isNaN(heading) || heading === null) {
+    let heading = r.heading_degT;
+    if (heading === null || heading === undefined || isNaN(heading)) {
       const numMatch = (r.le_ident || '').match(/\d+/);
       heading = numMatch ? parseInt(numMatch[0], 10) * 10 : 0;
     }
-
     return {
       ...r,
-      length_ft: Number(r.length_ft) || 6500,
-      width_ft: Number(r.width_ft) || 150,
-      le_lat: Number(r.le_latitude_deg),
-      le_lng: Number(r.le_longitude_deg),
-      he_lat: Number(r.he_latitude_deg),
-      he_lng: Number(r.he_longitude_deg),
-      computedHeading: heading,
-      baseAngle: Math.round(heading % 180)
+      computedHeading: Number(heading) || 0,
+      baseAngle: Math.round((Number(heading) || 0) % 180)
     };
   });
 
-  // 4. Kiểm tra tọa độ GPS thực
-  const hasRealCoords = parsedRunways.some(r => !isNaN(r.le_lat) && !isNaN(r.he_lat) && r.le_lat !== 0 && r.he_lat !== 0);
+  // Kiểm tra tính đầy đủ của cặp tọa độ đầu/cuối
+  const validCoordRunways = parsedRunways.filter(r => 
+    r.le_latitude_deg !== null && !isNaN(r.le_latitude_deg) &&
+    r.he_latitude_deg !== null && !isNaN(r.he_latitude_deg)
+  );
 
-  if (hasRealCoords && airport.latitude_deg) {
-    const refLat = (Number(airport.latitude_deg) || 0) * (Math.PI / 180);
+  if (validCoordRunways.length === parsedRunways.length && validCoordRunways.length > 0) {
+    // --- PHƯƠNG ÁN 1: CÓ ĐỦ TỌA ĐỘ TRẮC ĐỊA 2 ĐẦU ĐƯỜNG BĂNG ---
+    const refLat = airport.latitude_deg * (Math.PI / 180);
     const METERS_PER_DEG_LAT = 111320;
     const METERS_PER_DEG_LON = 111320 * Math.cos(refLat);
 
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
     const projected = parsedRunways.map(r => {
-      let leX = 0, leY = 0, heX = 0, heY = 0;
-      if (!isNaN(r.le_lat) && !isNaN(r.he_lat) && r.le_lat !== 0) {
-        leX = (r.le_lng - airport.longitude_deg) * METERS_PER_DEG_LON;
-        leY = (r.le_lat - airport.latitude_deg) * METERS_PER_DEG_LAT;
-        heX = (r.he_lng - airport.longitude_deg) * METERS_PER_DEG_LON;
-        heY = (r.he_lat - airport.latitude_deg) * METERS_PER_DEG_LAT;
-      } else {
-        const len = r.length_ft * 0.3048;
-        const rad = (r.computedHeading * Math.PI) / 180;
-        leX = -(len / 2) * Math.sin(rad);
-        leY = -(len / 2) * Math.cos(rad);
-        heX = (len / 2) * Math.sin(rad);
-        heY = (len / 2) * Math.cos(rad);
-      }
+      const leX = (r.le_longitude_deg - airport.longitude_deg) * METERS_PER_DEG_LON;
+      const leY = (r.le_latitude_deg - airport.latitude_deg) * METERS_PER_DEG_LAT;
+      const heX = (r.he_longitude_deg - airport.longitude_deg) * METERS_PER_DEG_LON;
+      const heY = (r.he_latitude_deg - airport.latitude_deg) * METERS_PER_DEG_LAT;
 
       minX = Math.min(minX, leX, heX);
       maxX = Math.max(maxX, leX, heX);
@@ -131,7 +116,7 @@ function drawRunwayBlueprint2D(airport) {
     });
 
   } else {
-    // Thuật toán tách dải offset nếu thiếu tọa độ thực
+    // --- PHƯƠNG ÁN 2: THIẾU TỌA ĐỘ HOẶC TỌA ĐỘ LỖI (VẼ BẰNG CHIỀU DÀI + GÓC HƯỚNG THỰC TẾ) ---
     const groups = {};
     parsedRunways.forEach(r => {
       if (!groups[r.baseAngle]) groups[r.baseAngle] = [];
@@ -142,8 +127,8 @@ function drawRunwayBlueprint2D(airport) {
       const total = group.length;
 
       group.forEach((r, idx) => {
-        const lengthPx = Math.min(Math.max(r.length_ft / 45, 120), 240);
-        const widthPx = Math.max(r.width_ft / 14, 8);
+        const lengthPx = Math.min(Math.max((Number(r.length_ft) || 6500) / 45, 120), 240);
+        const widthPx = Math.max((Number(r.width_ft) || 150) / 14, 8);
         const rad = (r.computedHeading * Math.PI) / 180;
 
         let offset = 0;
