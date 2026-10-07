@@ -133,7 +133,6 @@
       position: relative;
     }
 
-    /* SIDE PANEL */
     #side-panel {
       width: 0%; height: 100%;
       background: var(--hud-bg); border-left: var(--hud-border);
@@ -271,7 +270,7 @@
     let isRouteMode = false;
     let currentCategory = 'all';
 
-    // 1. KHỞI TẠO ĐỊA CẦU
+    // 1. GLOBE INITIALIZATION (CHẤM TRÒN HOÀN TOÀN + ĐƯỜNG BAY 1PX TỈ LỆ 2:1 DI CHUYỂN CHẬM)
     const world = Globe()(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
       .backgroundColor('#0a0a0f')
@@ -298,13 +297,13 @@
         if (connectedAirportIds.has(d.iata_code) || connectedAirportIds.has(d.ident)) return '#00f3ff';
         return 'rgba(40, 40, 60, 0.2)';
       })
-      .pointResolution(30)
+      .pointResolution(32) // ĐIỂM TRÒN MỊN TUYỆT ĐỐI
       
       .arcColor(d => d.color || ['rgba(0, 243, 255, 0.9)', 'rgba(255, 0, 127, 0.9)'])
-      .arcStroke(0.1)
-      .arcDashLength(0.2)
-      .arcDashGap(0.1)
-      .arcDashAnimateTime(4500)
+      .arcStroke(0.1) // 1PX MỎNG
+      .arcDashLength(0.2) // TỈ LỆ 2
+      .arcDashGap(0.1)    // TỈ LỆ 1
+      .arcDashAnimateTime(4500) // CHẠY CHẬM
       .arcAltitude(d => {
         const φ1 = d.startLat * Math.PI / 180;
         const φ2 = d.endLat * Math.PI / 180;
@@ -323,7 +322,7 @@
     world.controls().minDistance = 115;
     world.controls().maxDistance = 240;
 
-    // 2. DATA PIPELINE (LỌC CHUẨN XÁC SÂN BAY QUÂN SỰ)
+    // 2. TẢI DỮ LIỆU ĐỒNG THỜI
     Promise.all([
       fetchCSV('countries.csv'),
       fetchCSV('airports.csv'),
@@ -334,18 +333,17 @@
 
       allAirportsList = airports.filter(d => 
         d.latitude_deg && d.longitude_deg &&
-        (d.type === 'large_airport' || d.type === 'medium_airport' || d.type === 'small_airport')
+        (d.type === 'large_airport' || d.type === 'medium_airport')
       ).map(a => {
         const nameLower = (a.name || '').toLowerCase();
         
-        // CHỈ ĐÁNH DẤU LÀ QUÂN SỰ VỚI CÁC TỪ KHÓA CHÍNH XÁC (Tránh nhận diện nhầm Incheon, SGN, vv.)
+        // CHUẨN HÓA BỘ LỌC QUÂN SỰ: TRÁNH NHẬN NHẦM TÂN SƠN NHẤT / INCHEON
         const isMilitary = nameLower.includes('air force base') || 
                            nameLower.includes(' afb') || 
                            nameLower.includes('naval air station') || 
-                           nameLower.includes('air base') ||
-                           nameLower.includes('military airport') ||
-                           nameLower.includes('raf ') ||
-                           nameLower.includes('fliegerhorst');
+                           nameLower.includes('joint base') ||
+                           nameLower.includes('căn cứ quân sự') ||
+                           (a.type && a.type.toLowerCase() === 'military');
 
         return {
           ...a,
@@ -403,7 +401,7 @@
       } else if (currentCategory === 'large') {
         displayedAirports = allAirportsList.filter(a => a.type === 'large_airport' && !a.isMilitary);
       } else if (currentCategory === 'medium') {
-        displayedAirports = allAirportsList.filter(a => (a.type === 'medium_airport' || a.type === 'small_airport') && !a.isMilitary);
+        displayedAirports = allAirportsList.filter(a => a.type === 'medium_airport' && !a.isMilitary);
       } else if (currentCategory === 'military') {
         displayedAirports = allAirportsList.filter(a => a.isMilitary);
       }
@@ -414,7 +412,7 @@
       return (s || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
     }
 
-    // 3. AUTOCOMPLETE
+    // 3. AUTOCOMPLETE HỆ THỐNG
     function setupAutocompleteSystem() {
       setupSingleAutocomplete('search-input', 'airport-autocomplete', (selected) => {
         handleAirportSelect(selected);
@@ -501,7 +499,7 @@
       });
     }
 
-    // 4. ROUTE PATHFINDER
+    // 4. ROUTE PATHFINDER (100% TIẾNG ANH)
     const OPTION_COLORS = ['#00f3ff', '#ff00ea', '#ffe600', '#00ff66', '#ff7700', '#b026ff'];
 
     function resolveAirports(queryStr) {
@@ -704,10 +702,11 @@
       document.getElementById('airport-municipality').innerText = point.municipality || 'N/A';
       document.getElementById('airport-routes').innerText = `${routeCount} Connections`;
 
+      // ĐỢI ĐỦ 350MS ĐỂ PANEL CO GIÃN XONG RỒI MỚI VẼ RUNWAY
       setTimeout(() => {
         world.width(window.innerWidth / 2);
         drawRunwayBlueprint2D(point);
-      }, 400);
+      }, 350);
     }
 
     function closePanel() {
@@ -730,14 +729,17 @@
       world.height(window.innerHeight);
     });
 
-    // 6. THUẬT TOÁN RUNWAY BLUEPRINT MỚI: ĐẢM BẢO LUÔN LUÔN VẼ ĐƯỢC ĐƯỜNG BĂNG RÕ NÉT
+    // 6. THUẬT TOÁN VẼ RUNWAY ĐÃ SỬA DỨT ĐIỂM LỖI KHÔNG HIỆN VÀ LỖI ĐÈ NHAU
     function drawRunwayBlueprint2D(airport) {
       const canvas = document.getElementById('blueprint-canvas');
       const container = document.getElementById('blueprint-container');
       const statusText = document.getElementById('blueprint-status');
       
-      canvas.width = container.clientWidth || 400;
-      canvas.height = container.clientHeight || 320;
+      // Đảm bảo lấy đúng width và height thực tế
+      const rect = container.getBoundingClientRect();
+      canvas.width = rect.width || container.clientWidth || 400;
+      canvas.height = rect.height || container.clientHeight || 320;
+      
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
@@ -745,7 +747,7 @@
       const cy = canvas.height / 2;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // NẾU THỰC SỰ LÀ CĂN CỨ QUÂN SỰ -> HIỆN BẢO MẬT
+      // NẾU LÀ QUÂN SỰ THẬT: KHÓA BẢO MẬT
       if (airport.isMilitary) {
         document.getElementById('airport-rws-count').innerText = `RESTRICTED`;
         statusText.innerText = `> ACCESS DENIED: CLASSIFIED MILITARY ASSET`;
@@ -761,25 +763,24 @@
 
         ctx.strokeStyle = '#ff2a2a';
         ctx.lineWidth = 1.5;
-        ctx.strokeRect(cx - 150, cy - 45, 300, 90);
-        ctx.fillStyle = 'rgba(255, 42, 42, 0.1)';
-        ctx.fillRect(cx - 150, cy - 45, 300, 90);
+        ctx.strokeRect(cx - 140, cy - 40, 280, 80);
+        ctx.fillStyle = 'rgba(255, 42, 42, 0.08)';
+        ctx.fillRect(cx - 140, cy - 40, 280, 80);
 
         ctx.fillStyle = '#ff2a2a';
         ctx.font = 'bold 12px "Share Tech Mono"';
         ctx.textAlign = 'center';
-        ctx.fillText('TOP SECRET // NOFORN', cx, cy - 18);
+        ctx.fillText('TOP SECRET // NOFORN', cx, cy - 12);
         ctx.font = '10px "Share Tech Mono"';
-        ctx.fillText('TACTICAL BLUEPRINT CLASSIFIED', cx, cy + 2);
-        ctx.fillText('MILITARY SATELLITE SCRAMBLE ACTIVE', cx, cy + 20);
+        ctx.fillText('TACTICAL BLUEPRINT CLASSIFIED', cx, cy + 8);
+        ctx.fillText('MILITARY SATELLITE SCRAMBLE ACTIVE', cx, cy + 24);
         return;
       }
 
-      // SÂN BAY DÂN DỤNG
       statusText.style.color = `var(--neon-green)`;
       statusText.innerText = `> RUNWAY VECTOR BLUEPRINT LOADED [TRUE SCALE]`;
 
-      // Radar Circles & Axis
+      // Radar Circles
       ctx.strokeStyle = 'rgba(0, 243, 255, 0.15)';
       ctx.lineWidth = 1;
       [50, 95, 140].forEach(r => {
@@ -795,34 +796,47 @@
 
       ctx.fillStyle = '#00f3ff';
       ctx.font = '10px "Share Tech Mono"';
-      ctx.textAlign = 'center';
-      ctx.fillText('N (000°)', cx, cy - 152);
-      ctx.fillText('S (180°)', cx, cy + 158);
+      ctx.fillText('N (000°)', cx - 18, cy - 152);
+      ctx.fillText('S (180°)', cx - 18, cy + 158);
       ctx.fillText('E', cx + 152, cy + 4);
-      ctx.fillText('W', cx - 158, cy + 4);
+      ctx.fillText('W', cx - 162, cy + 4);
 
-      // Tra cứu đường băng từ runways.csv
-      let rawRws = runwaysList.filter(r => 
-        (r.airport_ident && (r.airport_ident === airport.ident || r.airport_ident === airport.iata_code)) ||
-        (r.airport_ref && airport.id && String(r.airport_ref) === String(airport.id))
-      );
+      // TRUY VẤN RUNWAYS TỪ NHIỀU NGUỒN KHÓA
+      const targetIdent = (airport.ident || '').toUpperCase();
+      const targetIATA = (airport.iata_code || '').toUpperCase();
+      const targetID = airport.id ? String(airport.id) : '';
 
-      // Dự phòng nếu không có trong runways.csv
+      let rawRws = runwaysList.filter(r => {
+        const rIdent = (r.airport_ident || '').toUpperCase();
+        const rRef = r.airport_ref ? String(r.airport_ref) : '';
+        return (rIdent === targetIdent || rIdent === targetIATA || (targetID && rRef === targetID));
+      });
+
+      // LỌC BỎ CÁC RUNWAY BỊ ĐÓNG CỬA (closed) HOẶC RÁC
+      rawRws = rawRws.filter(r => r.closed != 1 && r.closed != true);
+
+      // NẾU VẪN KHÔNG CÓ TRONG RUNWAYS.CSV, TỰ ĐỘNG TẠO ĐƯỜNG BĂNG ĐẠI DIỆN DỰA THEO QUY MÔ
       if (rawRws.length === 0) {
-        rawRws = [{ heading_degT: 75, length_ft: 10500, width_ft: 150, le_ident: '07', he_ident: '25' }];
         if (airport.type === 'large_airport') {
-          rawRws.push({ heading_degT: 75, length_ft: 12000, width_ft: 150, le_ident: '07L', he_ident: '25R' });
+          rawRws = [
+            { heading_degT: 70, length_ft: 11000, width_ft: 150, le_ident: '07L', he_ident: '25R' },
+            { heading_degT: 70, length_ft: 12500, width_ft: 150, le_ident: '07R', he_ident: '25L' }
+          ];
+        } else {
+          rawRws = [
+            { heading_degT: 90, length_ft: 8500, width_ft: 150, le_ident: '09', he_ident: '27' }
+          ];
         }
       }
 
       document.getElementById('airport-rws-count').innerText = `${rawRws.length} Runway(s)`;
 
-      // Chuẩn hóa góc quay cho từng runway
+      // CHUẨN HÓA THÔNG TIN ĐƯỜNG BĂNG
       const parsedRunways = rawRws.map(r => {
         let heading = r.heading_degT;
         if (heading === null || heading === undefined || isNaN(heading)) {
           const numMatch = (r.le_ident || '').match(/\d+/);
-          heading = numMatch ? parseInt(numMatch[0], 10) * 10 : 75;
+          heading = numMatch ? parseInt(numMatch[0], 10) * 10 : 90;
         }
         return {
           ...r,
@@ -831,72 +845,124 @@
         };
       });
 
-      // Gom nhóm các đường băng song song
-      const groups = {};
-      parsedRunways.forEach(r => {
-        if (!groups[r.baseAngle]) groups[r.baseAngle] = [];
-        groups[r.baseAngle].push(r);
-      });
+      // KIỂM TRA ĐIỀU KIỆN TỌA ĐỘ ĐẦU MÚT THỰC TẾ
+      const hasRealCoords = parsedRunways.length > 1 && parsedRunways.every(r => r.le_latitude_deg && r.he_latitude_deg);
 
-      // Vẽ từng nhóm runway trực tiếp vào tâm
-      Object.values(groups).forEach(group => {
-        const total = group.length;
+      if (hasRealCoords) {
+        const refLat = airport.latitude_deg * (Math.PI / 180);
+        const METERS_PER_DEG_LAT = 111320;
+        const METERS_PER_DEG_LON = 111320 * Math.cos(refLat);
 
-        group.forEach((r, idx) => {
-          // Tính toán chiều dài pixel chuẩn (từ 130px đến 240px)
-          const lengthPx = Math.min(Math.max((r.length_ft || 7500) / 45, 140), 240);
-          const widthPx = Math.max((r.width_ft || 150) / 14, 10);
-          const rad = (r.computedHeading * Math.PI) / 180;
+        let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
-          // Phân tách khoảng cách các đường băng song song
-          let offset = 0;
-          const ident = (r.le_ident || '').toUpperCase();
+        const projected = parsedRunways.map(r => {
+          const leX = (r.le_longitude_deg - airport.longitude_deg) * METERS_PER_DEG_LON;
+          const leY = (r.le_latitude_deg - airport.latitude_deg) * METERS_PER_DEG_LAT;
+          const heX = (r.he_longitude_deg - airport.longitude_deg) * METERS_PER_DEG_LON;
+          const heY = (r.he_latitude_deg - airport.latitude_deg) * METERS_PER_DEG_LAT;
 
-          if (ident.includes('L')) offset = -35;
-          else if (ident.includes('R')) offset = 35;
-          else if (ident.includes('C')) offset = 0;
-          else if (total > 1) {
-            offset = (idx - (total - 1) / 2) * 45;
-          }
+          minX = Math.min(minX, leX, heX);
+          maxX = Math.max(maxX, leX, heX);
+          minY = Math.min(minY, leY, heY);
+          maxY = Math.max(maxY, leY, heY);
 
-          const offX = offset * Math.cos(rad);
-          const offY = offset * Math.sin(rad);
-
-          ctx.save();
-          ctx.translate(cx + offX, cy + offY);
-          ctx.rotate(rad);
-
-          drawRunwayBody(ctx, widthPx, lengthPx, r.le_ident, r.he_ident);
-          ctx.restore();
+          return { ...r, leX, leY, heX, heY };
         });
-      });
+
+        const spanX = Math.max(maxX - minX, 600);
+        const spanY = Math.max(maxY - minY, 600);
+        const maxSpan = Math.max(spanX, spanY);
+        const scale = 220 / maxSpan;
+
+        const midX = (minX + maxX) / 2;
+        const midY = (minY + maxY) / 2;
+
+        projected.forEach(r => {
+          const p1x = cx + (r.leX - midX) * scale;
+          const p1y = cy - (r.leY - midY) * scale;
+          const p2x = cx + (r.heX - midX) * scale;
+          const p2y = cy - (r.heY - midY) * scale;
+
+          drawRunwayBetweenPoints(ctx, p1x, p1y, p2x, p2y, r.le_ident, r.he_ident);
+        });
+
+      } else {
+        // TÁCH PHÂN BỐ OFFSET THEO HƯỚNG VÀ SỐ HIỆU ĐƯỜNG BĂNG
+        const groups = {};
+        parsedRunways.forEach(r => {
+          if (!groups[r.baseAngle]) groups[r.baseAngle] = [];
+          groups[r.baseAngle].push(r);
+        });
+
+        Object.values(groups).forEach(group => {
+          const totalInGroup = group.length;
+
+          group.forEach((r, idx) => {
+            const lengthPx = Math.min(Math.max((r.length_ft || 7500) / 45, 140), 240);
+            const widthPx = Math.max((r.width_ft || 150) / 14, 8);
+            const rad = (r.computedHeading * Math.PI) / 180;
+
+            let offsetDistance = 0;
+            const ident = (r.le_ident || '').toUpperCase();
+
+            if (ident.includes('L')) offsetDistance = -38;
+            else if (ident.includes('R')) offsetDistance = 38;
+            else if (ident.includes('C')) offsetDistance = 0;
+            else if (totalInGroup > 1) {
+              offsetDistance = (idx - (totalInGroup - 1) / 2) * 44;
+            }
+
+            // TÍNH ĐỘ DỊCH VUÔNG GÓC VỚI HƯỚNG ĐƯỜNG BĂNG
+            const offX = offsetDistance * Math.cos(rad);
+            const offY = offsetDistance * Math.sin(rad);
+
+            ctx.save();
+            ctx.translate(cx + offX, cy + offY);
+            ctx.rotate(rad);
+
+            drawRunwayBody(ctx, widthPx, lengthPx, r.le_ident, r.he_ident);
+            ctx.restore();
+          });
+        });
+      }
     }
 
-    // Hàm vẽ thân đường băng chi tiết
     function drawRunwayBody(ctx, widthPx, lengthPx, leIdent, heIdent) {
-      // Nền đường băng
       ctx.fillStyle = 'rgba(0, 243, 255, 0.25)';
       ctx.strokeStyle = '#00f3ff';
       ctx.lineWidth = 1.5;
       ctx.fillRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
       ctx.strokeRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
 
-      // Tim đường băng vàng neon
       ctx.strokeStyle = '#ffe600';
       ctx.lineWidth = 1;
       ctx.setLineDash([5, 5]);
       ctx.beginPath();
-      ctx.moveTo(0, -lengthPx / 2 + 10);
-      ctx.lineTo(0, lengthPx / 2 - 10);
+      ctx.moveTo(0, -lengthPx / 2 + 8);
+      ctx.lineTo(0, lengthPx / 2 - 8);
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Nhãn số hiệu 2 đầu
       ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 9px "Share Tech Mono"';
       ctx.textAlign = 'center';
-      if (leIdent) ctx.fillText(leIdent, 0, lengthPx / 2 - 8);
-      if (heIdent) ctx.fillText(heIdent, 0, -lengthPx / 2 + 14);
+      if (leIdent) ctx.fillText(leIdent, 0, lengthPx / 2 - 6);
+      if (heIdent) ctx.fillText(heIdent, 0, -lengthPx / 2 + 12);
+    }
+
+    function drawRunwayBetweenPoints(ctx, x1, y1, x2, y2, leIdent, heIdent) {
+      const dx = x2 - x1;
+      const dy = y2 - y1;
+      const length = Math.sqrt(dx * dx + dy * dy);
+      const angle = Math.atan2(dy, dx);
+      const widthPx = 9;
+
+      ctx.save();
+      ctx.translate((x1 + x2) / 2, (y1 + y2) / 2);
+      ctx.rotate(angle - Math.PI / 2);
+
+      drawRunwayBody(ctx, widthPx, length, leIdent, heIdent);
+      ctx.restore();
     }
   </script>
 </body>
