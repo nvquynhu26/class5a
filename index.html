@@ -44,7 +44,6 @@
       letter-spacing: 1px;
     }
 
-    /* FILTER GROUP */
     #filter-group {
       position: absolute; top: 75px; left: 25px; z-index: 30;
       display: flex; gap: 6px; pointer-events: auto;
@@ -68,7 +67,6 @@
       box-shadow: 0 0 10px rgba(0, 255, 102, 0.4);
     }
 
-    /* TOP BAR CONTROLS */
     #top-bar {
       position: absolute; top: 15px; right: 25px; z-index: 40;
       display: flex; flex-direction: row; align-items: center; gap: 12px;
@@ -158,13 +156,18 @@
     }
     .close-btn:hover { background: var(--neon-pink); color: #fff; }
 
+    /* CỐ ĐỊNH KÍCH THƯỚC BLUEPRINT CONTAINER VÀ CANVAS ĐỂ CHỐNG LỖI HIỂN THỊ */
     #blueprint-container {
       width: 100%; height: 320px; border: 1px dashed var(--neon-cyan);
       margin-top: 15px; position: relative;
       background: radial-gradient(circle, rgba(0, 243, 255, 0.05) 0%, rgba(10, 10, 15, 0.95) 100%);
       display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
     }
-    #blueprint-canvas { width: 100%; height: 100%; display: block; }
+    #blueprint-canvas {
+      width: 100%; height: 100%;
+      object-fit: contain;
+    }
 
     .hud-title {
       font-size: 1.25rem; border-bottom: 1px solid var(--neon-cyan);
@@ -240,7 +243,8 @@
           <p><strong>RUNWAYS DETECTED:</strong> <span id="airport-rws-count" style="color: var(--neon-yellow)">---</span></p>
           
           <div id="blueprint-container">
-            <canvas id="blueprint-canvas"></canvas>
+            <!-- CỐ ĐỊNH WIDTH VÀ HEIGHT CHO CANVAS ĐỂ CHỐNG LỖI RESIZE -->
+            <canvas id="blueprint-canvas" width="500" height="320"></canvas>
           </div>
           <div class="status-text" id="blueprint-status">> RUNWAY VECTOR BLUEPRINT LOADED [TRUE SCALE]</div>
         </div>
@@ -270,7 +274,7 @@
     let isRouteMode = false;
     let currentCategory = 'all';
 
-    // 1. GLOBE INITIALIZATION (CHẤM TRÒN HOÀN TOÀN + ĐƯỜNG BAY 1PX TỈ LỆ 2:1 CHẠY CHẬM)
+    // 1. GLOBE INITIALIZATION
     const world = Globe()(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
       .backgroundColor('#0a0a0f')
@@ -297,12 +301,12 @@
         if (connectedAirportIds.has(d.iata_code) || connectedAirportIds.has(d.ident)) return '#00f3ff';
         return 'rgba(40, 40, 60, 0.2)';
       })
-      .pointResolution(32) // Chấm tròn 100% không còn ngũ giác
+      .pointResolution(32)
       .arcColor(d => d.color || ['rgba(0, 243, 255, 0.9)', 'rgba(255, 0, 127, 0.9)'])
-      .arcStroke(0.1) // 1px
-      .arcDashLength(0.2) // Tỉ lệ 2
-      .arcDashGap(0.1)    // Tỉ lệ 1
-      .arcDashAnimateTime(4500) // Chậm và mượt
+      .arcStroke(0.1)
+      .arcDashLength(0.2)
+      .arcDashGap(0.1)
+      .arcDashAnimateTime(4500)
       .arcAltitude(d => {
         const φ1 = d.startLat * Math.PI / 180;
         const φ2 = d.endLat * Math.PI / 180;
@@ -321,7 +325,7 @@
     world.controls().minDistance = 115;
     world.controls().maxDistance = 240;
 
-    // 2. DATA PIPELINE & NHẬN DIỆN CHUẨN XÁC SÂN BAY QUÂN SỰ / DÂN DỤNG
+    // 2. DATA PIPELINE
     Promise.all([
       fetchCSV('countries.csv'),
       fetchCSV('airports.csv'),
@@ -337,7 +341,6 @@
         const nameLower = (a.name || '').toLowerCase();
         const typeLower = (a.type || '').toLowerCase();
         
-        // SỬA LỖI: Sân bay lớn (large_airport) như Incheon, SGN, Heathrow TUYỆT ĐỐI KHÔNG PHẢI QUÂN SỰ
         let isMilitary = false;
         if (typeLower !== 'large_airport') {
           isMilitary = nameLower.includes('air force base') || 
@@ -345,7 +348,6 @@
                        nameLower.includes('military airport') || 
                        nameLower.includes('naval air station') || 
                        nameLower.includes('army airfield') ||
-                       nameLower.includes('căn cứ không quân') ||
                        nameLower.includes('nas ') ||
                        typeLower === 'military';
         }
@@ -504,7 +506,7 @@
       });
     }
 
-    // 4. ROUTE PATHFINDER (100% TIẾNG ANH)
+    // 4. ROUTE PATHFINDER
     const OPTION_COLORS = ['#00f3ff', '#ff00ea', '#ffe600', '#00ff66', '#ff7700', '#b026ff'];
 
     function resolveAirports(queryStr) {
@@ -707,10 +709,8 @@
       document.getElementById('airport-municipality').innerText = point.municipality || 'N/A';
       document.getElementById('airport-routes').innerText = `${routeCount} Connections`;
 
-      setTimeout(() => {
-        world.width(window.innerWidth / 2);
-        drawRunwayBlueprint2D(point);
-      }, 350);
+      // VẼ NGAY LẬP TỨC (KHÔNG CẦN CHỜ SETTIMEOUT)
+      drawRunwayBlueprint2D(point);
     }
 
     function closePanel() {
@@ -733,22 +733,21 @@
       world.height(window.innerHeight);
     });
 
-    // 6. THUẬT TOÁN VẼ RUNWAY VECTOR SỬA TRIỆT ĐỂ LỖI KHÔNG HIỆN ĐƯỜNG BĂNG
+    // 6. THUẬT TOÁN VẼ RUNWAY SỬA TRIỆT ĐỂ: KHÔNG BAO GIỜ BỊ ẨN HAY MẤT ĐƯỜNG BĂNG
     function drawRunwayBlueprint2D(airport) {
       const canvas = document.getElementById('blueprint-canvas');
-      const container = document.getElementById('blueprint-container');
       const statusText = document.getElementById('blueprint-status');
+      if (!canvas) return;
       
-      canvas.width = container.clientWidth || 400;
-      canvas.height = container.clientHeight || 320;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
 
-      const cx = canvas.width / 2;
-      const cy = canvas.height / 2;
+      // TÂM CỐ ĐỊNH THEO KÍCH THƯỚC NỘI TẠI 500x320 CỦA CANVAS
+      const cx = 250;
+      const cy = 160;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // BẢO MẬT CHỈ ÁP DỤNG CHO MILITARY THẬT SỰ
+      // NẾU LÀ SÂN BAY QUÂN SỰ THẬT SỰ
       if (airport.isMilitary) {
         document.getElementById('airport-rws-count').innerText = `RESTRICTED`;
         statusText.innerText = `> ACCESS DENIED: CLASSIFIED MILITARY ASSET`;
@@ -756,7 +755,7 @@
 
         ctx.strokeStyle = 'rgba(255, 42, 42, 0.25)';
         ctx.lineWidth = 1;
-        [50, 95, 140].forEach(r => {
+        [45, 85, 130].forEach(r => {
           ctx.beginPath();
           ctx.arc(cx, cy, r, 0, Math.PI * 2);
           ctx.stroke();
@@ -764,44 +763,45 @@
 
         ctx.strokeStyle = '#ff2a2a';
         ctx.lineWidth = 1.5;
-        ctx.strokeRect(cx - 150, cy - 45, 300, 90);
-        ctx.fillStyle = 'rgba(255, 42, 42, 0.1)';
-        ctx.fillRect(cx - 150, cy - 45, 300, 90);
+        ctx.strokeRect(cx - 140, cy - 40, 280, 80);
+        ctx.fillStyle = 'rgba(255, 42, 42, 0.12)';
+        ctx.fillRect(cx - 140, cy - 40, 280, 80);
 
         ctx.fillStyle = '#ff2a2a';
         ctx.font = 'bold 12px "Share Tech Mono"';
         ctx.textAlign = 'center';
-        ctx.fillText('TOP SECRET // NOFORN', cx, cy - 18);
+        ctx.fillText('TOP SECRET // NOFORN', cx, cy - 14);
         ctx.font = '10px "Share Tech Mono"';
-        ctx.fillText('TACTICAL BLUEPRINT CLASSIFIED', cx, cy + 2);
-        ctx.fillText('MILITARY SATELLITE SCRAMBLE ACTIVE', cx, cy + 20);
+        ctx.fillText('TACTICAL BLUEPRINT CLASSIFIED', cx, cy + 4);
+        ctx.fillText('SATELLITE SCRAMBLE ACTIVE', cx, cy + 20);
         return;
       }
 
-      // TRẠNG THÁI CHO SÂN BAY DÂN DỤNG
+      // TRẠNG THÁI SÂN BAY DÂN DỤNG
       statusText.style.color = `var(--neon-green)`;
       statusText.innerText = `> RUNWAY VECTOR BLUEPRINT LOADED [TRUE SCALE]`;
 
-      // Radar Circles & Crosshairs
-      ctx.strokeStyle = 'rgba(0, 243, 255, 0.15)';
+      // VẼ VÒNG TRÒN LA BÀN VÀ TRỤC TỌA ĐỘ
+      ctx.strokeStyle = 'rgba(0, 243, 255, 0.18)';
       ctx.lineWidth = 1;
-      [50, 95, 140].forEach(r => {
+      [45, 85, 130].forEach(r => {
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.stroke();
       });
 
       ctx.beginPath();
-      ctx.moveTo(cx, cy - 150); ctx.lineTo(cx, cy + 150);
-      ctx.moveTo(cx - 150, cy); ctx.lineTo(cx + 150, cy);
+      ctx.moveTo(cx, cy - 140); ctx.lineTo(cx, cy + 140);
+      ctx.moveTo(cx - 140, cy); ctx.lineTo(cx + 140, cy);
       ctx.stroke();
 
       ctx.fillStyle = '#00f3ff';
       ctx.font = '10px "Share Tech Mono"';
-      ctx.fillText('N (000°)', cx - 18, cy - 152);
-      ctx.fillText('S (180°)', cx - 18, cy + 158);
-      ctx.fillText('E', cx + 152, cy + 4);
-      ctx.fillText('W', cx - 162, cy + 4);
+      ctx.textAlign = 'center';
+      ctx.fillText('N (000°)', cx, cy - 144);
+      ctx.fillText('S (180°)', cx, cy + 152);
+      ctx.fillText('E', cx + 146, cy + 4);
+      ctx.fillText('W', cx - 146, cy + 4);
 
       // TÌM RUNWAYS ĐA TẦNG TỪ FILE
       let matchedRunways = runwaysList.filter(r => {
@@ -816,7 +816,7 @@
                (aRef && rRef === aRef);
       });
 
-      // Nếu không có trong database nhưng là sân bay dân dụng, dự phòng vẽ chuẩn theo quy mô
+      // DỰ PHÒNG CHUẨN NẾU THIẾU DATA TRONG RUNWAYS.CSV
       if (matchedRunways.length === 0) {
         if (airport.type === 'large_airport') {
           matchedRunways = [
@@ -832,8 +832,7 @@
 
       document.getElementById('airport-rws-count').innerText = `${matchedRunways.length} Runway(s)`;
 
-      // CHUẨN HÓA VÀ VẼ HÌNH HỌC TỪ TÂM (KHÔNG BAO GIỜ BỊ LỆCH RA NGOÀI CANVAS)
-      // Nhóm các đường băng theo góc hướng
+      // XỬ LÝ GÓC HƯỚNG VÀ NHÓM SONG SONG
       const headingGroups = {};
       matchedRunways.forEach(r => {
         let hdg = r.heading_degT;
@@ -847,26 +846,23 @@
         headingGroups[base].push(r);
       });
 
-      // Vẽ từng nhóm đường băng
+      // VẼ TRỰC TIẾP TỪ TÂM (CX, CY)
       Object.values(headingGroups).forEach(group => {
         const total = group.length;
 
         group.forEach((r, idx) => {
-          // Tính chiều dài hiển thị pixel (tối thiểu 140px, tối đa 260px)
           const lenFt = r.length_ft || 7500;
-          const lengthPx = Math.min(Math.max(lenFt / 40, 140), 260);
-          const widthPx = Math.max((r.width_ft || 150) / 14, 9);
-
+          const lengthPx = Math.min(Math.max(lenFt / 45, 130), 240);
+          const widthPx = Math.max((r.width_ft || 150) / 14, 10);
           const rad = (r.validHeading * Math.PI) / 180;
 
-          // Tính khoảng cách offset phân tách giữa các đường băng song song
           let offsetPx = 0;
           const idStr = String(r.le_ident || '').toUpperCase();
           if (idStr.includes('L')) offsetPx = -36;
           else if (idStr.includes('R')) offsetPx = 36;
           else if (idStr.includes('C')) offsetPx = 0;
           else if (total > 1) {
-            offsetPx = (idx - (total - 1) / 2) * 42;
+            offsetPx = (idx - (total - 1) / 2) * 40;
           }
 
           const offX = offsetPx * Math.cos(rad);
@@ -877,13 +873,13 @@
           ctx.rotate(rad);
 
           // Thân đường băng
-          ctx.fillStyle = 'rgba(0, 243, 255, 0.22)';
+          ctx.fillStyle = 'rgba(0, 243, 255, 0.25)';
           ctx.strokeStyle = '#00f3ff';
           ctx.lineWidth = 1.5;
           ctx.fillRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
           ctx.strokeRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
 
-          // Centerline (vàng neon đứt đoạn)
+          // Vạch tim đường băng màu vàng
           ctx.strokeStyle = '#ffe600';
           ctx.lineWidth = 1.2;
           ctx.setLineDash([6, 5]);
@@ -893,7 +889,7 @@
           ctx.stroke();
           ctx.setLineDash([]);
 
-          // Nhãn định danh hai đầu số hiệu
+          // Số hiệu 2 đầu
           ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 9px "Share Tech Mono"';
           ctx.textAlign = 'center';
