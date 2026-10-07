@@ -13,7 +13,7 @@
   <style>
     :root {
       --neon-cyan: #00f3ff;
-      --neon-blue: #0077ff;
+      --neon-blue: #00a0ff;
       --neon-pink: #ff007f;
       --neon-yellow: #ffe600;
       --neon-green: #00ff66;
@@ -44,26 +44,7 @@
       letter-spacing: 1px;
     }
 
-    /* BỘ LỌC PHÂN LOẠI SÂN BAY (FILTER HUD) */
-    #filter-bar {
-      position: absolute; top: 75px; left: 25px; z-index: 30;
-      display: flex; gap: 6px;
-    }
-    .filter-btn {
-      background: rgba(10, 10, 15, 0.85);
-      border: 1px solid #334455; color: #8899aa;
-      font-family: 'Share Tech Mono', monospace;
-      font-size: 0.75rem; padding: 5px 10px; cursor: pointer;
-      transition: all 0.2s;
-    }
-    .filter-btn:hover { border-color: var(--neon-cyan); color: #fff; }
-    .filter-btn.active {
-      border-color: var(--neon-cyan); color: #000;
-      background: var(--neon-cyan); font-weight: bold;
-      box-shadow: 0 0 10px rgba(0, 243, 255, 0.4);
-    }
-
-    /* TOP BAR HUD */
+    /* TOP BAR NẰM TRÊN 1 HÀNG */
     #top-bar {
       position: absolute; top: 15px; right: 25px; z-index: 40;
       display: flex; flex-direction: row; align-items: center; gap: 12px;
@@ -100,7 +81,26 @@
     .hud-btn.pink { color: var(--neon-pink); border-color: var(--neon-pink); }
     .hud-btn.pink:hover { background: var(--neon-pink); color: #fff; }
 
-    /* AUTOCOMPLETE DROPDOWN */
+    /* BỘ LỌC CATEGORY FILTER BUTTONS */
+    #category-filter {
+      position: absolute; bottom: 120px; left: 25px; z-index: 15;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .filter-btn {
+      background: rgba(10, 10, 15, 0.85);
+      border: 1px solid rgba(0, 243, 255, 0.4);
+      color: #88aacc; font-family: 'Share Tech Mono', monospace;
+      font-size: 0.75rem; padding: 5px 10px; cursor: pointer;
+      text-align: left; transition: all 0.2s;
+    }
+    .filter-btn:hover { border-color: var(--neon-cyan); color: #fff; }
+    .filter-btn.active {
+      background: rgba(0, 243, 255, 0.2);
+      border-color: var(--neon-cyan); color: var(--neon-cyan);
+      box-shadow: 0 0 8px rgba(0, 243, 255, 0.3); font-weight: bold;
+    }
+
+    /* DROPDOWN DANH SÁCH GỢI Ý A-Z */
     .autocomplete-list {
       position: absolute; top: 100%; left: 0; width: 100%;
       list-style: none; margin: 4px 0 0 0; padding: 0;
@@ -130,7 +130,7 @@
       position: relative;
     }
 
-    /* SIDE PANEL */
+    /* SIDE PANEL BÊN PHẢI */
     #side-panel {
       width: 0%; height: 100%;
       background: var(--hud-bg); border-left: var(--hud-border);
@@ -184,23 +184,15 @@
     <p>Global Aeronautical Intelligence & Orbital Terminal Blueprints</p>
   </div>
 
-  <!-- HUD FILTER PHÂN LOẠI SÂN BAY -->
-  <div id="filter-bar">
-    <button class="filter-btn active" onclick="applyAirportFilter('all')">[ ALL ]</button>
-    <button class="filter-btn" onclick="applyAirportFilter('large')">[ MAJOR ]</button>
-    <button class="filter-btn" onclick="applyAirportFilter('medium')">[ REGIONAL ]</button>
-    <button class="filter-btn" onclick="applyAirportFilter('military')">[ MILITARY ]</button>
-  </div>
-
   <!-- TOP BAR -->
   <div id="top-bar">
-    <div class="hud-group">
+    <div class="hud-group" id="airport-search-group">
       <input type="text" id="search-input" class="hud-input" style="width:200px;" placeholder="SEARCH AIRPORT / CODE..." autocomplete="off">
       <button class="hud-btn pink" id="btn-find-airport">[ FIND ]</button>
       <ul id="airport-autocomplete" class="autocomplete-list"></ul>
     </div>
 
-    <div class="hud-group">
+    <div class="hud-group" id="route-search-group">
       <div style="position:relative;">
         <input type="text" id="route-from" class="hud-input" style="width:140px;" placeholder="FROM: NZ / SGN..." autocomplete="off">
         <ul id="from-autocomplete" class="autocomplete-list"></ul>
@@ -214,12 +206,19 @@
     </div>
   </div>
 
+  <!-- 2. BỘ LỌC DANH MỤC SÂN BAY -->
+  <div id="category-filter">
+    <button class="filter-btn active" onclick="setCategoryFilter('all')">[ FILTER: ALL AIRPORTS ]</button>
+    <button class="filter-btn" onclick="setCategoryFilter('large')">[ MAJOR CIVIL ]</button>
+    <button class="filter-btn" onclick="setCategoryFilter('medium')">[ REGIONAL CIVIL ]</button>
+    <button class="filter-btn" onclick="setCategoryFilter('military')">[ MILITARY AIRBASE ]</button>
+  </div>
+
   <div id="legend">
     <div class="legend-item"><span class="dot" style="background: var(--neon-pink);"></span> MAJOR CIVIL (LARGE)</div>
     <div class="legend-item"><span class="dot" style="background: var(--neon-yellow);"></span> REGIONAL CIVIL (MEDIUM)</div>
     <div class="legend-item"><span class="dot" style="background: var(--neon-green);"></span> MILITARY AIRBASE</div>
     <div class="legend-item"><span class="dot" style="background: var(--neon-cyan);"></span> CONNECTED DESTINATIONS</div>
-    <div class="legend-item"><span style="display:inline-block; width:12px; height:1px; background:rgba(0,180,255,0.7); margin-right:6px;"></span> BORDERS (1PX / 50%)</div>
   </div>
 
   <div id="layout-container">
@@ -229,6 +228,7 @@
       <div class="panel-content">
         <button class="close-btn" onclick="closePanel()">[ ESC / CLOSE ]</button>
         
+        <!-- VIEW 1: SÂN BAY & BLUEPRINT -->
         <div id="airport-details-view">
           <div class="hud-title" id="airport-name">TERMINAL LOCKED</div>
           <p><strong>CODE:</strong> <span id="airport-code">---</span></p>
@@ -245,11 +245,13 @@
           <div class="status-text">> RUNWAY VECTOR BLUEPRINT LOADED [TRUE SCALE]</div>
         </div>
 
+        <!-- VIEW 2: ROUTE ONLY -->
         <div id="itinerary-view">
           <div class="hud-title" id="itinerary-title" style="color:var(--neon-green);">ROUTE PATHFINDER RESULTS</div>
           <p id="itinerary-subtitle" style="color:#aaa; font-size:0.85rem; margin-top:-8px;">SELECT AN ITINERARY BELOW</p>
           <div id="itinerary-list" style="margin-top:15px;"></div>
         </div>
+
       </div>
     </div>
   </div>
@@ -258,31 +260,30 @@
     const globeContainer = document.getElementById('globe-container');
     
     let airportsMap = new Map();
-    let masterAirportsList = [];
-    let currentFilteredList = [];
-    let currentFilterType = 'all';
-
+    let allAirportsList = [];
+    let displayedAirports = [];
     let countriesMap = new Map();
     let runwaysList = [];
     let routesList = [];
     let selectedAirportId = null;
     let connectedAirportIds = new Set();
     let isRouteMode = false;
+    let activeFilter = 'all';
 
-    // 1. KHỞI TẠO QUẢ ĐỊA CẦU TỐI ƯU
+    // 1. KHỞI TẠO ĐỊA CẦU VỚI VIỀN QUỐC GIA & ANIMATION ĐƯỜNG BAY
     const world = Globe()(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
       .backgroundColor('#0a0a0f')
       .showAtmosphere(true)
       .atmosphereColor('#00f3ff')
       .atmosphereAltitude(0.12)
-
-      // YÊU CẦU 1: LINE BIÊN GIỚI QUỐC GIA 1PX NEON BLUE, OPACITY 50%
-      .polygonCapColor(() => 'rgba(0, 0, 0, 0)') // Ruột rỗng trong suốt
+      
+      // 1. VIỀN QUỐC GIA XANH DƯƠNG NEON 1PX, OPACITY 50%
+      .polygonCapColor(() => 'rgba(0, 0, 0, 0)') // Bề mặt trong suốt
       .polygonSideColor(() => 'rgba(0, 0, 0, 0)')
-      .polygonStrokeColor(() => 'rgba(0, 180, 255, 0.5)') // Viền xanh dương neon 50%
-      .polygonAltitude(0.004)
-
+      .polygonStrokeColor(() => 'rgba(0, 160, 255, 0.5)') // Xanh dương neon 50% opacity
+      
+      // ĐIỂM SÂN BAY
       .pointLat('latitude_deg')
       .pointLng('longitude_deg')
       .pointAltitude(0)
@@ -292,7 +293,7 @@
         }
         if (d.ident === selectedAirportId) return 0.65;
         if (connectedAirportIds.has(d.iata_code) || connectedAirportIds.has(d.ident)) return 0.35;
-        return 0.05;
+        return 0.06;
       })
       .pointColor(d => {
         if (!selectedAirportId && !isRouteMode) {
@@ -304,14 +305,13 @@
         return 'rgba(40, 40, 60, 0.25)';
       })
       .pointResolution(6)
-
-      // YÊU CẦU 3: HIỆU ỨNG MÁY BAY CHẠY THEO LINE (ANIMATED FLIGHT PULSE)
-      .arcColor(d => d.color || ['rgba(0, 243, 255, 0.85)', 'rgba(255, 0, 127, 0.85)'])
+      
+      // 3. HIỆU ỨNG ANIMATION CHÙM SÁNG PHÁT RA TỪ SÂN BAY GỐC VÀ CHẠY ĐẾN ĐÍCH
+      .arcColor(d => d.color || ['rgba(0, 243, 255, 0.9)', 'rgba(255, 0, 127, 0.9)'])
       .arcStroke(d => d.stroke || 0.3)
-      .arcDashLength(0.25)          // Độ dài vệt hạt máy bay
-      .arcDashGap(1.2)              // Khoảng trống chờ lặp lại
-      .arcDashInitialGap(d => d.order ? d.order * 0.3 : 0)
-      .arcDashAnimateTime(2600)     // Thời gian máy bay bay từ gốc đến đích rồi biến mất
+      .arcDashLength(0.4)           // Độ dài hạt ánh sáng
+      .arcDashGap(1.2)              // Khoảng cách giữa các hạt
+      .arcDashAnimateTime(1800)     // Thời gian chu kỳ phát sáng chạy qua sân bay đích
       .arcAltitude(d => {
         const φ1 = d.startLat * Math.PI / 180;
         const φ2 = d.endLat * Math.PI / 180;
@@ -330,16 +330,22 @@
     world.controls().minDistance = 115;
     world.controls().maxDistance = 240;
 
-    // 2. TẢI DỮ LIỆU ĐỒNG THỜI & BẤT ĐỒNG BỘ GEOJSON
+    // 2. TẢI TOÀN BỘ FILE (BAO GỒM CUSTOM.GEO.JSON CHO VIỀN NƯỚC)
     Promise.all([
+      fetch('custom.geo.json').then(res => res.json()).catch(() => null),
       fetchCSV('countries.csv'),
       fetchCSV('airports.csv'),
       fetchCSV('runways.csv'),
       fetchRoutes('routes.dat')
-    ]).then(([countries, airports, runways, routes]) => {
+    ]).then(([geoJson, countries, airports, runways, routes]) => {
+      // Nạp viền quốc gia
+      if (geoJson) {
+        world.polygonsData(geoJson.features);
+      }
+
       countries.forEach(c => countriesMap.set(c.code, c.name));
 
-      masterAirportsList = airports.filter(d => 
+      allAirportsList = airports.filter(d => 
         d.latitude_deg && d.longitude_deg &&
         (d.type === 'large_airport' || d.type === 'medium_airport')
       ).map(a => {
@@ -358,7 +364,7 @@
         };
       });
       
-      masterAirportsList.forEach(a => {
+      allAirportsList.forEach(a => {
         if (a.ident) airportsMap.set(a.ident, a);
         if (a.iata_code) airportsMap.set(a.iata_code, a);
       });
@@ -366,17 +372,30 @@
       runwaysList = runways;
       routesList = routes;
 
-      applyAirportFilter('all');
+      applyFilter();
       setupAutocompleteSystem();
-
-      // Tải GeoJSON sau cùng để không chặn render UI ban đầu (Yêu cầu 4)
-      fetch('custom.geo.json')
-        .then(res => res.json())
-        .then(geoJson => {
-          world.polygonsData(geoJson.features);
-        })
-        .catch(() => console.warn("custom.geo.json not found or error loading borders."));
     });
+
+    // 2. LOGIC FILTER BỘ LỌC SÂN BAY
+    function setCategoryFilter(filterType) {
+      activeFilter = filterType;
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      applyFilter();
+    }
+
+    function applyFilter() {
+      if (activeFilter === 'all') {
+        displayedAirports = allAirportsList;
+      } else if (activeFilter === 'large') {
+        displayedAirports = allAirportsList.filter(a => a.type === 'large_airport' && !a.isMilitary);
+      } else if (activeFilter === 'medium') {
+        displayedAirports = allAirportsList.filter(a => a.type === 'medium_airport' && !a.isMilitary);
+      } else if (activeFilter === 'military') {
+        displayedAirports = allAirportsList.filter(a => a.isMilitary);
+      }
+      world.pointsData([...displayedAirports]);
+    }
 
     function fetchCSV(filename) {
       return new Promise(resolve => {
@@ -405,30 +424,7 @@
       return (s || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
     }
 
-    // YÊU CẦU 2: HÀM LỌC SÂN BAY (MAJOR, REGIONAL, MILITARY, ALL)
-    function applyAirportFilter(type) {
-      currentFilterType = type;
-      
-      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-      const activeBtn = Array.from(document.querySelectorAll('.filter-btn')).find(b => 
-        b.innerText.toLowerCase().includes(type)
-      );
-      if (activeBtn) activeBtn.classList.add('active');
-
-      if (type === 'all') {
-        currentFilteredList = [...masterAirportsList];
-      } else if (type === 'large') {
-        currentFilteredList = masterAirportsList.filter(a => a.type === 'large_airport' && !a.isMilitary);
-      } else if (type === 'medium') {
-        currentFilteredList = masterAirportsList.filter(a => a.type === 'medium_airport' && !a.isMilitary);
-      } else if (type === 'military') {
-        currentFilteredList = masterAirportsList.filter(a => a.isMilitary);
-      }
-
-      world.pointsData(currentFilteredList);
-    }
-
-    // 3. AUTOCOMPLETE GỢI Ý A-Z
+    // AUTOCOMPLETE SYSTEM
     function setupAutocompleteSystem() {
       setupSingleAutocomplete('search-input', 'airport-autocomplete', (selected) => {
         handleAirportSelect(selected);
@@ -444,7 +440,7 @@
 
       document.getElementById('btn-find-airport').addEventListener('click', () => {
         const val = cleanStr(document.getElementById('search-input').value);
-        const match = masterAirportsList.find(a => 
+        const match = allAirportsList.find(a => 
           cleanStr(a.iata_code) === val || cleanStr(a.ident) === val || cleanStr(a.name).includes(val)
         );
         if (match) handleAirportSelect(match);
@@ -464,7 +460,7 @@
           return;
         }
 
-        const matched = masterAirportsList.filter(a => {
+        const matched = allAirportsList.filter(a => {
           return cleanStr(a.name).includes(query) ||
                  cleanStr(a.iata_code).includes(query) ||
                  cleanStr(a.ident).includes(query) ||
@@ -515,13 +511,13 @@
       });
     }
 
-    // 4. TÌM KIẾM HÀNH TRÌNH BAY ĐA CHẶNG
+    // PATHFINDER
     const OPTION_COLORS = ['#00f3ff', '#ff00ea', '#ffe600', '#00ff66', '#ff7700', '#b026ff'];
 
     function resolveAirports(queryStr) {
       const q = cleanStr(queryStr);
       if (!q) return [];
-      return masterAirportsList.filter(a => 
+      return allAirportsList.filter(a => 
         cleanStr(a.iso_country) === q ||
         cleanStr(a.countryName) === q ||
         cleanStr(a.iata_code) === q ||
@@ -630,14 +626,14 @@
           allArcs.push({
             startLat: leg.from.latitude_deg, startLng: leg.from.longitude_deg,
             endLat: leg.to.latitude_deg, endLng: leg.to.longitude_deg,
-            color: color, stroke: 0.35, order: lIdx
+            color: color, stroke: 0.35
           });
 
           return `
             <div style="margin-top:4px;">
               [Leg ${lIdx+1}] <strong>${leg.from.iata_code || leg.from.ident}</strong> (${leg.from.municipality || leg.from.countryName})
               &rarr; <strong>${leg.to.iata_code || leg.to.ident}</strong> (${leg.to.municipality || leg.to.countryName})
-              <span style="color:${color};">[✈ ${leg.airline || 'N/A'}]</span>
+              <span style="color:${color};">[Air: ${leg.airline || 'N/A'}]</span>
             </div>
           `;
         }).join('');
@@ -652,7 +648,7 @@
 
       connectedAirportIds = highAirports;
       world.arcsData(allArcs);
-      world.pointsData([...masterAirportsList]);
+      world.pointsData([...displayedAirports]);
 
       document.body.classList.add('panel-open');
       world.controls().autoRotate = false;
@@ -662,7 +658,7 @@
       world.pointOfView({ lat: firstLegStart.latitude_deg, lng: firstLegStart.longitude_deg, altitude: 1.2 }, 1000);
     }
 
-    // 5. CHỌN SÂN BAY ĐƠN LẺ
+    // CHỌN SÂN BAY
     function handleAirportSelect(point) {
       isRouteMode = false;
       selectedAirportId = point.ident;
@@ -683,7 +679,7 @@
             matchedRoutes.push({
               startLat: point.latitude_deg, startLng: point.longitude_deg,
               endLat: target.latitude_deg, endLng: target.longitude_deg,
-              color: ['rgba(0, 243, 255, 0.85)', 'rgba(255, 0, 127, 0.85)'],
+              color: ['rgba(0, 243, 255, 0.9)', 'rgba(255, 0, 127, 0.9)'],
               stroke: 0.25
             });
           }
@@ -691,7 +687,7 @@
       });
 
       world.arcsData(matchedRoutes);
-      world.pointsData([...masterAirportsList]);
+      world.pointsData([...displayedAirports]);
 
       openAirportPanel(point, matchedRoutes.length);
     }
@@ -733,7 +729,7 @@
       isRouteMode = false;
       
       world.arcsData([]);
-      applyAirportFilter(currentFilterType);
+      world.pointsData([...displayedAirports]);
 
       setTimeout(() => {
         world.width(window.innerWidth);
@@ -745,7 +741,7 @@
       world.height(window.innerHeight);
     });
 
-    // 6. DỰNG BLUEPRINT VECTOR 2D
+    // RUNWAY BLUEPRINT 2D
     function drawRunwayBlueprint2D(airport) {
       const canvas = document.getElementById('blueprint-canvas');
       const container = document.getElementById('blueprint-container');
