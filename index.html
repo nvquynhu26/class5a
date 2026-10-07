@@ -16,9 +16,9 @@
       --neon-cyan: #00f3ff;
       --neon-magenta: #ff00ea;
       --neon-green: #00ff66;
-      --bg-dark: #050508;
-      --hud-bg: rgba(5, 5, 8, 0.9);
-      --hud-border: 1px solid var(--neon-cyan);
+      --bg-dark: #07070a;
+      --hud-bg: rgba(7, 7, 10, 0.9);
+      --hud-border: 1px solid rgba(0, 243, 255, 0.4);
     }
 
     body, html {
@@ -31,72 +31,79 @@
     }
 
     #header {
-      position: absolute; top: 20px; left: 30px; z-index: 10;
-      pointer-events: none; text-shadow: 0 0 10px rgba(0,243,255,0.5);
+      position: absolute; top: 25px; left: 35px; z-index: 10;
+      pointer-events: none;
     }
-    #header h1 { margin: 0; font-size: 2.5rem; letter-spacing: 4px; }
-    #header p { margin: 5px 0 0 0; font-size: 0.9rem; color: #888; }
+    #header h1 {
+      margin: 0; font-size: 2.2rem; letter-spacing: 5px;
+      text-shadow: 0 0 15px rgba(0, 243, 255, 0.5);
+    }
+    #header p {
+      margin: 5px 0 0 0; font-size: 0.85rem; color: #888;
+      text-transform: uppercase; letter-spacing: 2px;
+    }
 
     #layout-container { display: flex; width: 100%; height: 100%; }
     
-    /* Container của Trái Đất - Chuyển động mượt bằng transform thay vì đổi width để tránh re-render lag */
-    #globe-wrapper {
+    #globe-container {
       width: 100%; height: 100%;
-      display: flex; justify-content: center; align-items: center;
-      transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
-      will-change: transform; /* Tối ưu hóa GPU */
+      transition: width 0.9s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
     }
-    #globe-container { width: 100%; height: 100%; }
 
     #side-panel {
-      position: absolute; right: 0; top: 0;
-      width: 50%; height: 100%;
+      width: 0%; height: 100%;
       background: var(--hud-bg);
       border-left: var(--hud-border);
-      box-shadow: -10px 0 30px rgba(0, 243, 255, 0.1);
-      transform: translateX(100%);
-      transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+      box-shadow: -10px 0 30px rgba(0, 0, 0, 0.8);
+      transition: width 0.9s cubic-bezier(0.16, 1, 0.3, 1);
       display: flex; flex-direction: column;
-      z-index: 5; will-change: transform;
+      overflow-y: auto; z-index: 5;
     }
-    
-    .panel-content { padding: 40px; overflow-y: auto; height: 100%; }
 
-    /* Trạng thái khi click Sân bay */
-    body.panel-open #globe-wrapper { transform: translateX(-25%); }
-    body.panel-open #side-panel { transform: translateX(0); }
+    .panel-content {
+      padding: 40px; width: 100vw; max-width: 50vw; opacity: 0;
+      transition: opacity 0.5s ease-in-out;
+      box-sizing: border-box;
+    }
 
+    body.panel-open #globe-container { width: 50%; }
+    body.panel-open #side-panel { width: 50%; }
+    body.panel-open .panel-content { opacity: 1; transition-delay: 0.5s; }
+
+    /* Tooltip tối ưu tốc độ render CSS */
     .aero-tooltip {
-      background: rgba(0,0,0,0.8); border: 1px solid var(--neon-green);
-      padding: 12px; border-radius: 4px; color: #fff;
-      box-shadow: 0 0 15px rgba(0, 255, 102, 0.2);
-      pointer-events: none;
+      background: rgba(10, 10, 15, 0.95);
+      border: 1px solid var(--neon-cyan);
+      padding: 12px 15px; border-radius: 2px;
+      box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+      font-size: 0.9rem; pointer-events: none;
+      transform: translateZ(0); /* Ép dùng GPU render tooltip */
     }
+
+    .hud-title {
+      font-size: 1.6rem; border-bottom: 1px solid rgba(0, 243, 255, 0.3);
+      padding-bottom: 12px; margin-bottom: 25px;
+      text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
+    }
+
+    .close-btn {
+      position: absolute; top: 25px; right: 30px;
+      background: transparent; color: #fff;
+      border: 1px solid #555; padding: 6px 18px; 
+      cursor: pointer; font-family: inherit; transition: all 0.2s;
+    }
+    .close-btn:hover { background: var(--neon-magenta); border-color: var(--neon-magenta); }
 
     #blueprint-view {
-      width: 100%; height: 350px;
-      border: 1px dashed var(--neon-magenta);
-      margin: 20px 0; background: rgba(0,0,0,0.5);
-    }
-    
-    .close-btn {
-      position: absolute; top: 20px; right: 20px;
-      background: transparent; color: var(--neon-magenta);
-      border: 1px solid var(--neon-magenta); padding: 8px 20px;
-      cursor: pointer; font-family: inherit; font-size: 1rem;
-      transition: all 0.3s;
-    }
-    .close-btn:hover { background: var(--neon-magenta); color: #fff; }
-    
-    #loading-overlay {
-      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      font-size: 2rem; color: var(--neon-green); z-index: 99; text-shadow: 0 0 20px var(--neon-green);
+      width: 100%; height: 40vh;
+      border: 1px solid rgba(0, 255, 102, 0.2);
+      background: rgba(0, 255, 102, 0.02);
+      margin-top: 20px; position: relative;
     }
   </style>
 </head>
 <body>
-
-  <div id="loading-overlay">INITIALIZING GLOBAL RADAR...</div>
 
   <div id="header">
     <h1>AEROVEXIS</h1>
@@ -104,93 +111,103 @@
   </div>
 
   <div id="layout-container">
-    <div id="globe-wrapper">
-      <div id="globe-container"></div>
-    </div>
+    <div id="globe-container"></div>
     
     <div id="side-panel">
       <div class="panel-content">
-        <button class="close-btn" onclick="closePanel()">[ CLOSE ]</button>
-        <h2 style="color:var(--neon-cyan); border-bottom:1px solid; padding-bottom:10px;" id="airport-name">TERMINAL</h2>
-        <p><strong>CODE:</strong> <span id="airport-code">---</span></p>
-        <p><strong>COUNTRY:</strong> <span id="airport-country">---</span></p>
+        <button class="close-btn" onclick="closePanel()">CLOSE [X]</button>
+        <div class="hud-title" id="airport-name">SYSTEM READY...</div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; color: #ccc;">
+          <p><span style="color:var(--neon-cyan)">IATA/ICAO:</span> <br><span id="airport-code" style="font-size:1.2rem; color:#fff">---</span></p>
+          <p><span style="color:var(--neon-cyan)">ELEVATION:</span> <br><span id="airport-elev" style="font-size:1.2rem; color:#fff">---</span> ft</p>
+          <p><span style="color:var(--neon-cyan)">CITY/REGION:</span> <br><span id="airport-city" style="color:#fff">---</span></p>
+          <p><span style="color:var(--neon-cyan)">COUNTRY:</span> <br><span id="airport-country" style="color:#fff">---</span></p>
+        </div>
         
         <div id="blueprint-view"></div>
-        <p style="color: var(--neon-green)">> AWAITING TELEMETRY DATA...</p>
+        <p style="color: var(--neon-green); font-size: 0.85rem; margin-top: 15px;">> ESTABLISHING SECURE CONNECTION TO TERMINAL SYSTEMS...</p>
       </div>
     </div>
   </div>
 
   <script>
-    // 1. TỐI ƯU QUẢ ĐỊA CẦU
     const globeContainer = document.getElementById('globe-container');
+    
+    // 1. KHỞI TẠO QUẢ CẦU VỚI CẤU HÌNH TỐI ƯU
     const world = Globe({ animateIn: false })(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
-      .backgroundColor('rgba(0,0,0,0)')
-      .pointAltitude(0.005)
-      .pointColor(d => d.type === 'large_airport' ? '#ff00ea' : '#00f3ff')
-      .pointResolution(12) // Giảm số mặt polygon của mỗi chấm để chống lag (Cực kỳ quan trọng)
+      .backgroundColor('#07070a')
+      .pointAltitude(0.01)
+      .pointColor(() => '#00f3ff')
+      .pointResolution(12) // TỐI ƯU: Giảm poly của điểm để tăng FPS
       .showAtmosphere(true)
       .atmosphereColor('#00f3ff')
       .atmosphereAltitude(0.15)
       .onPointHover(point => {
-        globeContainer.style.cursor = point ? 'pointer' : 'default';
         if (point) {
-          // Hover hiện thông tin quốc gia và sân bay
+          globeContainer.style.cursor = 'crosshair';
+          // Tương tác hover: Hiện thông tin cơ bản của khu vực/quốc gia
           world.tooltipContent(() => `
             <div class="aero-tooltip">
-              <span style="color:var(--neon-green); font-size:1.2rem;">${point.iso_country}</span><br>
-              <strong>${point.name}</strong><br>
-              Type: ${point.type.replace('_', ' ')}
+              <strong style="color:var(--neon-magenta); font-size:1.1em;">${point.name}</strong><br>
+              <span style="color:#888">City:</span> ${point.municipality || 'Unknown'}<br>
+              <span style="color:#888">Region ID:</span> ${point.iso_region}<br>
+              <span style="color:#888">Country Code:</span> <strong style="color:var(--neon-green)">${point.iso_country}</strong>
             </div>
           `);
+        } else {
+          globeContainer.style.cursor = 'default';
         }
       })
-      .onPointClick(point => openPanel(point));
+      .onPointClick(point => {
+        openPanel(point);
+      });
 
-    // Quay chậm Trái Đất (0.15 thay vì 0.5)
+    // TỐI ƯU: Cho trái đất quay thật chậm theo yêu cầu (0.1 thay vì 0.5)
     world.controls().autoRotate = true;
-    world.controls().autoRotateSpeed = 0.15;
-    world.controls().enableDamping = true; // Làm mượt khi dùng chuột xoay
+    world.controls().autoRotateSpeed = 0.1;
+    world.controls().enableDamping = true; // Cảm giác mượt khi dùng chuột kéo
 
-    // 2. TẢI DỮ LIỆU ĐA LUỒNG (WORKER) ĐỂ TRÁNH ĐƠ TRÌNH DUYỆT
+    // 2. PARSE DATA BẰNG WEB WORKER (CHỐNG LAG)
     Papa.parse('airports.csv', {
       download: true,
       header: true,
       dynamicTyping: true,
-      worker: true, // Đẩy việc đọc file CSV sang luồng phụ (Web Worker)
+      worker: true, // TỐI ƯU: Chạy nền không làm đơ trang
       complete: function(results) {
-        // Chỉ lọc sân bay lớn và vừa để tối ưu FPS
-        const validAirports = results.data.filter(d => 
+        // Chỉ lấy sân bay thương mại và có toạ độ hợp lệ để tránh rác dữ liệu
+        const filtered = results.data.filter(d => 
           d.latitude_deg && d.longitude_deg && 
           (d.type === 'large_airport' || d.type === 'medium_airport')
         );
 
-        const mappedData = validAirports.map(d => ({
+        const mappedData = filtered.map(d => ({
           lat: d.latitude_deg,
           lng: d.longitude_deg,
-          size: d.type === 'large_airport' ? 0.3 : 0.1, // Sân bay to -> chấm to
+          size: d.type === 'large_airport' ? 0.3 : 0.12,
           ...d
         }));
 
         world.pointsData(mappedData).pointRadius('size');
-        document.getElementById('loading-overlay').style.display = 'none';
       }
     });
 
-    // 3. LOGIC GIAO DIỆN MƯỢT MÀ
-    let blueprintScene, blueprintRenderer, reqAnim;
-
+    // 3. LOGIC UI
     function openPanel(point) {
+      world.controls().autoRotate = false;
+      // Di chuyển camera đến điểm click (cận cảnh)
+      world.pointOfView({ lat: point.lat, lng: point.lng, altitude: 0.6 }, 1000);
+
       document.body.classList.add('panel-open');
       
-      // Khóa xoay tự động và di chuyển camera đến điểm click
-      world.controls().autoRotate = false;
-      world.pointOfView({ lat: point.lat, lng: point.lng, altitude: 0.8 }, 800);
+      setTimeout(() => { world.width(window.innerWidth / 2); }, 50);
 
       document.getElementById('airport-name').innerText = `> ${point.name}`;
-      document.getElementById('airport-code').innerText = `${point.iata_code || point.ident}`;
-      document.getElementById('airport-country').innerText = point.iso_country;
+      document.getElementById('airport-code').innerText = `${point.iata_code || 'N/A'} / ${point.ident || 'N/A'}`;
+      document.getElementById('airport-elev').innerText = point.elevation_ft || '0';
+      document.getElementById('airport-city').innerText = point.municipality || 'N/A';
+      document.getElementById('airport-country').innerText = point.iso_country || 'N/A';
 
       initBlueprint();
     }
@@ -198,51 +215,82 @@
     function closePanel() {
       document.body.classList.remove('panel-open');
       world.controls().autoRotate = true;
+      setTimeout(() => { world.width(window.innerWidth); }, 50);
       
-      // Xóa scene 3D để giải phóng RAM (Chống rò rỉ bộ nhớ gây lag)
-      if (reqAnim) cancelAnimationFrame(reqAnim);
-      if (blueprintRenderer) {
-        blueprintRenderer.dispose();
-        document.getElementById('blueprint-view').innerHTML = '';
-      }
+      disposeBlueprint();
     }
 
-    // 4. MÔ PHỎNG BLUEPRINT 3D
+    window.addEventListener('resize', () => {
+      world.width(document.body.classList.contains('panel-open') ? window.innerWidth / 2 : window.innerWidth);
+      world.height(window.innerHeight);
+    });
+
+    // 4. HỆ THỐNG BLUEPRINT 3D & QUẢN LÝ BỘ NHỚ
+    let bpScene, bpCamera, bpRenderer, bpReqAnim;
+    let bpGeometries = [], bpMaterials = []; // Mảng lưu trữ để dọn dẹp RAM
+
     function initBlueprint() {
+      disposeBlueprint(); // Xoá cảnh cũ nếu có trước khi render cảnh mới
+
       const container = document.getElementById('blueprint-view');
-      container.innerHTML = '';
-      if (reqAnim) cancelAnimationFrame(reqAnim);
+      const w = container.clientWidth;
+      const h = container.clientHeight;
 
-      blueprintScene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
-      camera.position.set(0, 30, 40);
-      camera.lookAt(0, 0, 0);
+      bpScene = new THREE.Scene();
+      bpCamera = new THREE.PerspectiveCamera(40, w/h, 0.1, 1000);
+      bpCamera.position.set(0, 40, 60);
+      bpCamera.lookAt(0, 0, 0);
 
-      blueprintRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: false }); // Tắt antialias để render nhanh hơn
-      blueprintRenderer.setSize(container.clientWidth, container.clientHeight);
-      container.appendChild(blueprintRenderer.domElement);
+      bpRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+      bpRenderer.setSize(w, h);
+      container.appendChild(bpRenderer.domElement);
 
-      const grid = new THREE.GridHelper(60, 30, 0x00f3ff, 0x003344);
-      blueprintScene.add(grid);
+      // Lưới mặt đất
+      const gridHelper = new THREE.GridHelper(80, 40, 0x00ff66, 0x002211);
+      bpScene.add(gridHelper);
 
-      // Khối đường băng giả lập
-      const geo = new THREE.BoxGeometry(4, 0.1, 20);
-      const mat = new THREE.MeshBasicMaterial({ color: 0xff00ea, wireframe: true });
-      const mesh = new THREE.Mesh(geo, mat);
-      blueprintScene.add(mesh);
+      // Tạo một group để xoay toàn bộ cụm sân bay
+      const airportGroup = new THREE.Group();
+      bpScene.add(airportGroup);
+
+      // Dải đường băng (Mô phỏng)
+      const rwGeo = new THREE.BoxGeometry(8, 0.5, 45);
+      const rwMat = new THREE.MeshBasicMaterial({ color: 0x00f3ff, wireframe: true, transparent: true, opacity: 0.7 });
+      const rwMesh = new THREE.Mesh(rwGeo, rwMat);
+      airportGroup.add(rwMesh);
+      
+      // Nhà ga (Mô phỏng)
+      const termGeo = new THREE.BoxGeometry(12, 4, 8);
+      const termMat = new THREE.MeshBasicMaterial({ color: 0xff00ea, wireframe: true });
+      const termMesh = new THREE.Mesh(termGeo, termMat);
+      termMesh.position.set(12, 2, 0);
+      airportGroup.add(termMesh);
+
+      // Đẩy vào mảng để quản lý dọn rác
+      bpGeometries.push(rwGeo, termGeo);
+      bpMaterials.push(rwMat, termMat);
 
       function animate() {
-        reqAnim = requestAnimationFrame(animate);
-        mesh.rotation.y += 0.01;
-        blueprintRenderer.render(blueprintScene, camera);
+        bpReqAnim = requestAnimationFrame(animate);
+        airportGroup.rotation.y += 0.003; // Quay cụm khối 3D chầm chậm
+        bpRenderer.render(bpScene, bpCamera);
       }
       animate();
     }
 
-    window.addEventListener('resize', () => {
-      world.width(window.innerWidth);
-      world.height(window.innerHeight);
-    });
+    // TỐI ƯU: Hàm giải phóng GPU (chống Memory Leak)
+    function disposeBlueprint() {
+      if(bpReqAnim) cancelAnimationFrame(bpReqAnim);
+      if(bpRenderer) {
+        bpGeometries.forEach(geo => geo.dispose());
+        bpMaterials.forEach(mat => mat.dispose());
+        bpGeometries = []; bpMaterials = [];
+        
+        bpRenderer.dispose();
+        const container = document.getElementById('blueprint-view');
+        if(container) container.innerHTML = '';
+      }
+    }
   </script>
 </body>
 </html>
