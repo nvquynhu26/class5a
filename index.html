@@ -27,56 +27,43 @@
       color: var(--neon-cyan); overflow: hidden;
     }
 
-    /* HEADER */
+    /* MÀN HÌNH LOADING TRÁNH ĐỨNG MÁY */
+    #loader {
+      position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: var(--bg-dark); z-index: 100;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      transition: opacity 0.5s;
+    }
+    #loader.hidden { opacity: 0; pointer-events: none; }
+    .spinner { border: 4px solid rgba(0, 243, 255, 0.1); border-top: 4px solid var(--neon-cyan); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin-bottom: 20px;}
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
     #header { position: absolute; top: 20px; left: 30px; z-index: 20; pointer-events: none; }
     #header h1 { margin: 0; font-size: 2.5rem; letter-spacing: 4px; text-shadow: 0 0 10px var(--neon-cyan); }
     #header p { margin: 5px 0 0 0; font-size: 0.9rem; color: #aaa; text-transform: uppercase; letter-spacing: 2px; }
 
-    /* FLOATING UI HAI BÊN */
-    .floating-ui {
-      position: absolute; top: 50%; transform: translateY(-50%);
-      width: 220px; padding: 20px; background: rgba(5, 5, 8, 0.6);
-      border: 1px solid rgba(0, 243, 255, 0.2); backdrop-filter: blur(5px);
-      z-index: 10; transition: opacity 0.5s, transform 0.5s;
-    }
-    #left-ui { left: 30px; }
-    #right-ui { right: 30px; text-align: right; }
-    .floating-ui h3 { color: var(--neon-magenta); border-bottom: 1px solid var(--neon-cyan); padding-bottom: 5px; margin-top:0; }
-    .floating-ui ul { list-style: none; padding: 0; margin:0; }
-    .floating-ui li { margin: 12px 0; cursor: pointer; opacity: 0.6; transition: 0.2s; font-size: 0.9rem; }
-    .floating-ui li:hover { opacity: 1; color: #fff; text-shadow: 0 0 8px #fff; }
-
-    /* BỐ CỤC CHUYỂN ĐỘNG BẰNG GPU (Không resize Canvas) */
     #layout-container { position: relative; width: 100vw; height: 100vh; }
     
     #globe-wrapper {
       position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
-      transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1); /* Di chuyển siêu mượt */
+      transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
     }
 
-    /* BLUEPRINT PANEL (ẨN BÊN PHẢI) */
     #side-panel {
       position: absolute; top: 0; right: 0;
-      width: 50vw; height: 100vh; background: var(--hud-bg);
+      width: 45vw; height: 100vh; background: var(--hud-bg);
       border-left: var(--hud-border); box-shadow: -10px 0 30px rgba(0, 243, 255, 0.1);
-      transform: translateX(100%); /* Giấu ra ngoài màn hình */
-      transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
+      transform: translateX(100%); transition: transform 0.8s cubic-bezier(0.25, 1, 0.5, 1);
       z-index: 30; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden;
     }
     .panel-content { padding: 40px; }
 
-    /* TRẠNG THÁI KHI CLICK MỞ PANEL */
-    body.panel-open #globe-wrapper { transform: translateX(-25vw); } /* Đẩy địa cầu sang trái 25% */
-    body.panel-open #side-panel { transform: translateX(0); } /* Kéo Panel vào */
-    body.panel-open .floating-ui { opacity: 0; pointer-events: none; } /* Ẩn menu 2 bên */
-    body.panel-open #left-ui { transform: translate(-50px, -50%); }
-    body.panel-open #right-ui { transform: translate(50px, -50%); }
+    body.panel-open #globe-wrapper { transform: translateX(-20vw); }
+    body.panel-open #side-panel { transform: translateX(0); }
 
-    /* TOOLTIP */
     .aero-tooltip {
       background: rgba(5, 5, 10, 0.95); border: 1px solid var(--neon-cyan);
-      padding: 12px; border-radius: 4px; box-shadow: 0 0 15px rgba(0, 243, 255, 0.2);
-      pointer-events: none; max-width: 260px;
+      padding: 12px; border-radius: 4px; box-shadow: 0 0 15px rgba(0, 243, 255, 0.2); pointer-events: none;
     }
 
     #blueprint-view { width: 100%; height: 350px; border: 1px dashed var(--neon-green); margin-top: 20px; position: relative; background: #000; }
@@ -91,171 +78,221 @@
 </head>
 <body>
 
+  <!-- LOADING OVERLAY -->
+  <div id="loader">
+    <div class="spinner"></div>
+    <h2 id="load-text">INITIALIZING SATELLITE LINK...</h2>
+  </div>
+
   <div id="header">
     <h1>AEROVEXIS</h1>
     <p>Orbital Terminal Blueprints</p>
   </div>
 
-  <div id="left-ui" class="floating-ui">
-    <h3>NAVIGATION</h3>
-    <ul><li>[+] Flight Corridors</li><li>[+] Live Radar Feed</li><li>[+] Weather Overlay</li></ul>
-  </div>
-  
-  <div id="right-ui" class="floating-ui">
-    <h3>DATABASE</h3>
-    <ul><li>Navaids (VOR/NDB)</li><li>Global Terminals</li><li>Emergency Routes</li></ul>
-  </div>
-
   <div id="layout-container">
-    <!-- Bọc địa cầu vào wrapper để dùng CSS transform đẩy đi -->
     <div id="globe-wrapper">
         <div id="globe-container"></div>
     </div>
     
     <div id="side-panel">
       <div class="panel-content">
-        <button class="close-btn" onclick="closePanel()">[ ESC / CLOSE ]</button>
+        <button class="close-btn" onclick="closePanel()">[ RESET SCAN ]</button>
         <h2 class="hud-title" id="airport-name">SYSTEM READY...</h2>
         <p><strong>IATA / ICAO :</strong> <span id="airport-code" style="color:#fff">---</span></p>
         <p><strong>ELEVATION :</strong> <span id="airport-elev" style="color:#fff">---</span> ft</p>
         <p><strong>COUNTRY :</strong> <span id="airport-country" style="color:#fff">---</span></p>
-        <p><strong>TYPE :</strong> <span id="airport-type" style="color:var(--neon-green)">---</span></p>
+        <p><strong>CONNECTIONS :</strong> <span id="airport-routes" style="color:var(--neon-magenta)">0 routes found</span></p>
         
         <div id="blueprint-view"></div>
-        <div style="margin-top: 20px; color: #888">> FETCHING RUNWAY/TERMINAL DATA...</div>
+        <div style="margin-top: 20px; color: #888">> DISPLAYING BLUEPRINT SCHEMATIC...</div>
       </div>
     </div>
   </div>
 
   <script>
-    // --- 1. KHỞI TẠO ĐỊA CẦU ---
-    const globeContainer = document.getElementById('globe-container');
-    let hoveredPoint = null;
-    let precomputedCountryData = {}; // Cache dữ liệu sân bay để tránh lag
+    // URL raw trực tiếp để chống lỗi CORS (Không chạy local server vẫn load được)
+    const AIRPORTS_URL = 'https://raw.githubusercontent.com/davidmegginson/ourairports-data/main/airports.csv';
+    const ROUTES_URL = 'https://raw.githubusercontent.com/jpatokal/openflights/master/data/routes.dat';
+    const GEOJSON_URL = 'https://raw.githubusercontent.com/nvquynhu26/class5a/main/custom.geo.json';
 
+    // Biến lưu trữ dữ liệu
+    let allAirports = [];
+    let airportMap = {}; // Tra cứu nhanh sân bay
+    let routesMap = {}; // Tra cứu chuyến bay theo điểm đi
+
+    // Khởi tạo địa cầu
+    const globeContainer = document.getElementById('globe-container');
     const world = Globe()(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
       .backgroundColor('#050508')
-      .pointAltitude(0.001) // Fix 3: Dẹt xuống sát bề mặt, tạo thành "chấm" (dot) thay vì cột
-      .pointColor(d => d.type === 'large_airport' ? '#00ff66' : '#00f3ff') // Sân bay lớn màu xanh lá
+      .pointAltitude(0.001) // Điểm dẹt
+      .pointColor(d => d.type === 'large_airport' ? '#00ff66' : '#00f3ff')
       .pointResolution(16)
       .onPointHover(point => {
-        hoveredPoint = point;
         globeContainer.style.cursor = point ? 'pointer' : 'default';
         if (point) {
           world.tooltipContent(() => `
             <div class="aero-tooltip">
-              <strong style="color:var(--neon-green)">${point.name} (${point.iata_code || point.ident})</strong><br>
-              <span style="color:#aaa">Country:</span> <span style="color:#fff">${point.iso_country}</span><br>
-              <span style="color:#aaa">Class:</span> <span style="color:#fff">${point.type.replace('_', ' ').toUpperCase()}</span>
+              <strong style="color:var(--neon-green)">${point.name}</strong><br>
+              <span style="color:#aaa">Code:</span> <span style="color:#fff">${point.iata_code || point.ident}</span>
             </div>
           `);
         }
       })
       .onPointClick(point => openPanel(point))
-      .onPolygonHover(polygon => {
-        // Nếu đang hover đè lên 1 chấm sân bay, không hiện tooltip quốc gia để tránh loạn
-        if (hoveredPoint || !polygon) return; 
-
-        const isoCode = polygon.properties.iso_a2 || polygon.properties.ISO_A2 || polygon.properties.adm0_a3;
-        const countryName = polygon.properties.name || polygon.properties.ADMIN || isoCode;
-        
-        // Trích xuất chuỗi HTML đã được tính toán sẵn từ lúc load file (Fix lag cực mạnh)
-        const airportListHTML = precomputedCountryData[isoCode] || '<p style="color:#888; font-size:0.85rem;">Không có dữ liệu trạm</p>';
-
-        world.tooltipContent(() => `
-          <div class="aero-tooltip">
-            <strong style="color:var(--neon-magenta); font-size:1.1rem;">[ ${countryName} ]</strong>
-            <div style="margin-top:8px;">${airportListHTML}</div>
-          </div>
-        `);
+      // Tương tác khi hover vào đường bay
+      .onArcHover(arc => {
+        if(arc) {
+          world.tooltipContent(() => `
+            <div class="aero-tooltip" style="border-color: var(--neon-magenta)">
+              <strong style="color:var(--neon-magenta)">FLIGHT ROUTE</strong><br>
+              Airline Code: <span style="color:#fff">${arc.airline}</span><br>
+              Route: <span style="color:#fff">${arc.srcIata} ➝ ${arc.dstIata}</span>
+            </div>
+          `);
+        }
       });
 
-    // Fix 1: QUAY ĐỊA CẦU ĐÚNG CÁCH
     world.controls().autoRotate = true;
-    world.controls().autoRotateSpeed = 0.8; // Tốc độ quay đủ nhìn rõ
+    world.controls().autoRotateSpeed = 0.5;
 
-    // --- 2. LOAD BIÊN GIỚI QUỐC GIA (OPACITY 50%) ---
-    fetch('custom.geo.json').then(res => res.json()).then(geoJson => {
+    // QUY TRÌNH TẢI VÀ XỬ LÝ DỮ LIỆU ĐỒNG THỜI (PROMISES)
+    Promise.all([
+      fetch(AIRPORTS_URL).then(r => r.text()),
+      fetch(ROUTES_URL).then(r => r.text()),
+      fetch(GEOJSON_URL).then(r => r.json()).catch(() => null)
+    ]).then(([airportsCsv, routesCsv, geoJson]) => {
+      
+      document.getElementById('load-text').innerText = "PROCESSING DATABASE...";
+
+      // 1. Nạp bản đồ quốc gia (Chỉ viền, bỏ hover, opacity cực mờ)
+      if (geoJson) {
         world.polygonsData(geoJson.features)
-             .polygonAltitude(0.002)
-             .polygonCapColor(() => 'rgba(0, 0, 0, 0)') // Lõi trong suốt
-             .polygonSideColor(() => 'rgba(0, 0, 0, 0)')
-             .polygonStrokeColor(() => 'rgba(0, 243, 255, 0.4)'); // Viền Cyan Opacity 40%
-    }).catch(() => console.warn("Missing custom.geo.json"));
-
-    // --- 3. LOAD & TỐI ƯU HÓA DỮ LIỆU SÂN BAY ---
-    Papa.parse('airports.csv', {
-      download: true,
-      header: true,
-      dynamicTyping: true,
-      complete: function(results) {
-        const filteredAirports = [];
-        const rawCountryGroups = {};
-
-        results.data.forEach(d => {
-          // Fix 3: Thể hiện đúng chấm to, chấm nhỏ dựa vào Type
-          if (d.latitude_deg && d.longitude_deg && d.type && d.type.includes('airport') && d.type !== 'closed') {
-            if (d.type === 'large_airport') d.size = 0.3;      // Chấm to
-            else if (d.type === 'medium_airport') d.size = 0.15; // Chấm vừa
-            else if (d.type === 'small_airport') d.size = 0.05;  // Chấm li ti
-            else return; 
-
-            filteredAirports.push({ lat: d.latitude_deg, lng: d.longitude_deg, ...d });
-
-            // Nhóm vào quốc gia
-            if (!rawCountryGroups[d.iso_country]) rawCountryGroups[d.iso_country] = [];
-            rawCountryGroups[d.iso_country].push(d);
-          }
-        });
-
-        // Áp điểm lên địa cầu
-        world.pointsData(filteredAirports).pointRadius('size');
-
-        // Fix 2: TÍNH TOÁN SẴN TOOLTIP QUỐC GIA (Ngăn chặn đứng hình khi hover)
-        for (const iso in rawCountryGroups) {
-          // Sắp xếp ưu tiên hiển thị sân bay lớn trước
-          const sorted = rawCountryGroups[iso].sort((a, b) => b.size - a.size);
-          const topList = sorted.slice(0, 5).map(a => 
-            `<li style="margin-bottom:3px; font-size:0.85rem; color:#fff;">
-              <span style="color:var(--neon-green)">${a.type === 'large_airport' ? '★ ' : '· '}</span>${a.name}
-            </li>`
-          ).join('');
-          const moreCount = sorted.length > 5 ? `<li style="color:#888; font-size:0.8rem; margin-top:5px;">+ ${sorted.length - 5} trạm khác...</li>` : '';
-          
-          precomputedCountryData[iso] = `<ul style="list-style:none; padding:0; margin:0;">${topList}${moreCount}</ul>`;
-        }
+             .polygonAltitude(0.001)
+             .polygonCapColor(() => 'rgba(0,0,0,0)') // Trống bên trong
+             .polygonSideColor(() => 'rgba(0,0,0,0)')
+             .polygonStrokeColor(() => 'rgba(0, 243, 255, 0.1)'); // Viền siêu mờ
       }
+
+      // 2. Phân tích Airports
+      Papa.parse(airportsCsv, {
+        header: true,
+        dynamicTyping: true,
+        skipEmptyLines: true,
+        complete: function(res) {
+          res.data.forEach(d => {
+            // Chỉ lấy sân bay thương mại để giảm tải
+            if (d.latitude_deg && d.longitude_deg && (d.type === 'large_airport' || d.type === 'medium_airport')) {
+              d.size = d.type === 'large_airport' ? 0.25 : 0.08;
+              d.lat = d.latitude_deg;
+              d.lng = d.longitude_deg;
+              
+              allAirports.push(d);
+              
+              // Tạo từ điển để tìm kiếm nhanh
+              if (d.iata_code) airportMap[d.iata_code] = d;
+              if (d.ident) airportMap[d.ident] = d; // Back-up
+            }
+          });
+          world.pointsData(allAirports).pointRadius('size');
+        }
+      });
+
+      // 3. Phân tích Routes
+      Papa.parse(routesCsv, {
+        header: false, // routes.dat không có header
+        skipEmptyLines: true,
+        complete: function(res) {
+          res.data.forEach(row => {
+            // row[0] = Airline, row[2] = Source, row[4] = Destination
+            const airline = row[0];
+            const source = row[2];
+            const dest = row[4];
+
+            if (!routesMap[source]) routesMap[source] = [];
+            routesMap[source].push({ dest: dest, airline: airline });
+          });
+        }
+      });
+
+      // Ẩn Loading
+      document.getElementById('loader').classList.add('hidden');
     });
 
-    // --- 4. ANIMATION MỞ / ĐÓNG PANEL (CSS GPU) ---
+    // --- LOGIC MỞ BẢNG & HIỂN THỊ ĐƯỜNG BAY ---
+    let activeArcs = [];
+
     function openPanel(point) {
-      world.controls().autoRotate = false; // Dừng xoay
-      world.pointOfView({ lat: point.lat, lng: point.lng, altitude: 0.6 }, 1000); // Zoom gần
-      
-      // Kích hoạt CSS Transform chuyển mượt sang trái (Không resize)
+      world.controls().autoRotate = false;
+      world.pointOfView({ lat: point.lat, lng: point.lng, altitude: 0.8 }, 1000);
       document.body.classList.add('panel-open');
       
+      const code = point.iata_code || point.ident;
+      
+      // Tìm các đường bay từ sân bay này
+      const routes = routesMap[code] || [];
+      activeArcs = [];
+      let connectedAirports = new Set([point]); // Lưu các sân bay có liên quan
+
+      routes.forEach(route => {
+        const destAirport = airportMap[route.dest];
+        if (destAirport) {
+          activeArcs.push({
+            startLat: point.lat,
+            startLng: point.lng,
+            endLat: destAirport.lat,
+            endLng: destAirport.lng,
+            airline: route.airline,
+            srcIata: code,
+            dstIata: route.dest
+          });
+          connectedAirports.add(destAirport);
+        }
+      });
+
+      // Cập nhật thông tin UI
       document.getElementById('airport-name').innerText = `> ${point.name || 'UNKNOWN'}`;
-      document.getElementById('airport-code').innerText = `${point.iata_code || point.ident}`;
+      document.getElementById('airport-code').innerText = code;
       document.getElementById('airport-elev').innerText = point.elevation_ft || '0';
       document.getElementById('airport-country').innerText = point.iso_country || 'N/A';
-      document.getElementById('airport-type').innerText = point.type.toUpperCase();
+      document.getElementById('airport-routes').innerText = `${activeArcs.length} active routes`;
 
-      initBlueprint(); // Bật sa bàn
+      // VẼ ĐƯỜNG BAY (ARCS)
+      world.arcsData(activeArcs)
+           .arcColor(() => '#ff00ea') // Màu hồng Neon
+           .arcDashLength(0.4)
+           .arcDashGap(0.2)
+           .arcDashAnimateTime(1500)
+           .arcStroke(0.6);
+
+      // LÀM MỜ SÂN BAY KHÔNG LIÊN QUAN
+      world.pointColor(d => {
+        if (connectedAirports.has(d)) {
+          return d.type === 'large_airport' ? '#00ff66' : '#00f3ff'; // Giữ màu cho sân bay liên quan
+        }
+        return 'rgba(50, 50, 50, 0.1)'; // Làm mờ đục sân bay khác
+      });
+
+      initBlueprint();
     }
 
+    // ĐÓNG PANEL (RESET TRẠNG THÁI)
     function closePanel() {
       document.body.classList.remove('panel-open');
-      world.controls().autoRotate = true; // Xoay tiếp
+      world.controls().autoRotate = true;
       
+      // Xóa đường bay
+      world.arcsData([]);
+      // Phục hồi màu tất cả sân bay
+      world.pointColor(d => d.type === 'large_airport' ? '#00ff66' : '#00f3ff');
+
       if (blueprintRenderer) {
         cancelAnimationFrame(reqAnim);
         document.getElementById('blueprint-view').innerHTML = '';
       }
     }
 
-    // --- 5. RENDER BLUEPRINT 3D ---
+    // --- BLUEPRINT RENDERER ---
     let blueprintScene, blueprintCamera, blueprintRenderer, reqAnim;
     function initBlueprint() {
       const container = document.getElementById('blueprint-view');
