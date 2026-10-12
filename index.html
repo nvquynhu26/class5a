@@ -155,7 +155,7 @@
     }
     .close-btn:hover { background: var(--neon-pink); color: #fff; }
 
-    /* THIẾT KẾ GRID GỌN GÀNG CHO PHẦN THÔNG TIN CƠ BẢN */
+    /* BẢNG THÔNG TIN GỌN GÀNG 2 CỘT */
     .info-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -209,7 +209,6 @@
       justify-content: space-between;
     }
 
-    /* SECTION TIÊU ĐỀ PHỤ */
     .section-header {
       font-size: 0.95rem;
       color: var(--neon-cyan);
@@ -324,7 +323,6 @@
         <div id="airport-details-view">
           <div class="hud-title" id="airport-name">TERMINAL LOCKED</div>
           
-          <!-- BẢNG THÔNG TIN GỌN GÀNG 2 CỘT -->
           <div class="info-grid">
             <div class="info-item">
               <strong>CODE:</strong>
@@ -356,18 +354,15 @@
             <strong>RUNWAYS DETECTED:</strong> <span id="airport-rws-count" style="color: var(--neon-yellow)">---</span>
           </div>
 
-          <!-- MULTI-BLUEPRINT GRID -->
           <div id="blueprints-grid"></div>
           <div class="status-text" id="blueprint-status">> SYSTEM IDLE</div>
 
-          <!-- PHẦN FREQUENCIES -->
           <div class="section-header">
             COMMUNICATION FREQUENCIES
             <span id="freq-count-badge">[0 REGISTERED]</span>
           </div>
           <div id="frequencies-container"></div>
 
-          <!-- PHẦN COMMENTS -->
           <div class="section-header">
             PILOT INTEL & COMMUNITY LOGS
             <span id="comments-count-badge">[0 LOGS]</span>
@@ -394,8 +389,8 @@
     let countriesMap = new Map();
     let runwaysList = [];
     let routesList = [];
-    let frequenciesMap = {};
-    let commentsList = [];
+    let frequenciesByAirport = new Map();
+    let commentsByAirport = new Map();
     
     let selectedAirportId = null;
     let connectedAirportIds = new Set();
@@ -410,7 +405,7 @@
       return Math.acos(Math.max(-1, Math.min(1, cosAngle)));
     }
 
-    // 1. GLOBE INITIALIZATION (KÈM LAYER RINGS GRADIENT DƯỚI NỀN)
+    // 1. GLOBE INITIALIZATION
     const world = Globe()(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
       .backgroundColor('#0a0a0f')
@@ -419,7 +414,10 @@
       .atmosphereAltitude(0.12)
       .pointLat('latitude_deg')
       .pointLng('longitude_deg')
-      .pointAltitude(0.005)
+      
+      // XÓA BỎ TOÀN BỘ CHIỀU CAO CỦA CÁC CHẤM TRÒN (DÁN HOÀN TOÀN TRÊN MẶT ĐẤT)
+      .pointAltitude(0)
+      
       .pointRadius(d => {
         if (!selectedAirportId && !isRouteMode) {
           return d.isMilitary ? 0.28 : (d.type === 'large_airport' ? 0.38 : 0.16);
@@ -439,14 +437,14 @@
       })
       .pointResolution(32)
       
-      // LAYER RINGS GRADIENT THỂ HIỆN SỐ LƯỢNG FREQUENCIES
+      // LAYER RINGS GRADIENT THỂ HIỆN DIỆN TÍCH / TẦN SỐ NẰM DƯỚI CÙNG
       .ringLat('latitude_deg')
       .ringLng('longitude_deg')
-      .ringAltitude(0.001) // Nằm dưới điểm chấm và dưới đường bay
-      .ringColor(d => d.color || (t => `rgba(0, 243, 255, ${0.4 * (1 - t)})`))
+      .ringAltitude(0)
+      .ringColor(d => d.color)
       .ringMaxRadius('maxR')
       .ringPropagationSpeed(1.2)
-      .ringRepeatPeriod(2400)
+      .ringRepeatPeriod(2800)
 
       .arcColor(d => d.color || ['rgba(0, 243, 255, 0.9)', 'rgba(255, 0, 127, 0.9)'])
       .arcStroke(0.12)
@@ -460,9 +458,11 @@
         const factor = Math.max(0.6, rad / 0.5);
         return Math.max(0.004, 0.035 / factor);
       })
+      
+      // ĐƯỜNG BAY CHẬM LẠI 0.5 LẦN (TĂNG GẤP ĐÔI THỜI GIAN ANIMATE)
       .arcDashAnimateTime(d => {
         const rad = calcGreatCircleAngle(d);
-        return Math.max(5000, rad * 3800);
+        return Math.max(10000, rad * 7600);
       })
       .arcAltitude(d => {
         const angle = calcGreatCircleAngle(d);
@@ -478,15 +478,16 @@
     world.controls().minDistance = 115;
     world.controls().maxDistance = 380;
 
-    // 2. DATA PIPELINE (NẠP THÊM 3 FILE MỚI ĐÃ LÀM SẠCH)
+    // 2. DATA PIPELINE (NẠP ĐẦY ĐỦ VÀ CHỐNG LỖI TOÀN DIỆN CHO FREQUENCIES & COMMENTS)
     Promise.all([
       fetchCSV('countries.csv'),
       fetchCSV('airports.csv'),
       fetchCSV('runways.csv'),
       fetchRoutes('routes.dat'),
-      fetchJSON('airport_frequencies_map.json'),
-      fetchCSV('airport_comments.csv')
-    ]).then(([countries, airports, runways, routes, freqMap, comments]) => {
+      fetchJSON('airport_frequencies_map.json').catch(() => null),
+      fetchCSV('airport_frequencies.csv').catch(() => []),
+      fetchCSV('airport_comments.csv').catch(() => [])
+    ]).then(([countries, airports, runways, routes, freqMapJson, freqCsv, comments]) => {
       countries.forEach(c => countriesMap.set(c.code, c.name));
 
       allAirportsList = airports.filter(d => 
@@ -527,8 +528,44 @@
       });
 
       runwaysList = runways;
-      frequenciesMap = freqMap || {};
-      commentsList = comments || [];
+
+      // XỬ LÝ FREQUENCIES: NẾU CÓ JSON THÌ MAP THEO JSON, NẾU KHÔNG THÌ TỰ MAP THEO CSV
+      if (freqMapJson && typeof freqMapJson === 'object' && Object.keys(freqMapJson).length > 0) {
+        Object.keys(freqMapJson).forEach(key => {
+          frequenciesByAirport.set(String(key).trim().toUpperCase(), freqMapJson[key]);
+        });
+      } else if (Array.isArray(freqCsv) && freqCsv.length > 0) {
+        freqCsv.forEach(item => {
+          const identKey = item.airport_ident ? String(item.airport_ident).trim().toUpperCase() : null;
+          const refKey = item.airport_ref ? String(item.airport_ref).trim() : null;
+          
+          if (identKey) {
+            if (!frequenciesByAirport.has(identKey)) frequenciesByAirport.set(identKey, []);
+            frequenciesByAirport.get(identKey).push(item);
+          }
+          if (refKey) {
+            if (!frequenciesByAirport.has(refKey)) frequenciesByAirport.set(refKey, []);
+            frequenciesByAirport.get(refKey).push(item);
+          }
+        });
+      }
+
+      // XỬ LÝ COMMENTS THEO IDENT VÀ REF
+      if (Array.isArray(comments) && comments.length > 0) {
+        comments.forEach(c => {
+          const cIdent = c.airport_ident ? String(c.airport_ident).trim().toUpperCase() : null;
+          const cRef = c.airport_ref ? String(c.airport_ref).trim() : null;
+
+          if (cIdent) {
+            if (!commentsByAirport.has(cIdent)) commentsByAirport.set(cIdent, []);
+            commentsByAirport.get(cIdent).push(c);
+          }
+          if (cRef) {
+            if (!commentsByAirport.has(cRef)) commentsByAirport.set(cRef, []);
+            commentsByAirport.get(cRef).push(c);
+          }
+        });
+      }
 
       applyFilter();
       setupAutocompleteSystem();
@@ -537,20 +574,23 @@
     function fetchCSV(filename) {
       return new Promise(resolve => {
         Papa.parse(filename, {
-          download: true, header: true, dynamicTyping: true,
+          download: true, header: true, dynamicTyping: true, skipEmptyLines: true,
           complete: res => resolve(res.data)
         });
       });
     }
 
     function fetchJSON(filename) {
-      return fetch(filename).then(res => res.json()).catch(() => ({}));
+      return fetch(filename).then(res => {
+        if (!res.ok) throw new Error('Network error');
+        return res.json();
+      });
     }
 
     function fetchRoutes(filename) {
       return new Promise(resolve => {
         Papa.parse(filename, {
-          download: true, header: false, dynamicTyping: true,
+          download: true, header: false, dynamicTyping: true, skipEmptyLines: true,
           complete: res => {
             const cleanRoutes = res.data.map(r => ({
               airline: r[0], src: r[2], dst: r[4]
@@ -808,7 +848,7 @@
 
       connectedAirportIds = highAirports;
       world.arcsData(allArcs);
-      world.ringsData([]); // Tắt gradient khi ở route mode
+      world.ringsData([]); 
       world.pointsData([...displayedAirports]);
 
       document.body.classList.add('panel-open');
@@ -819,7 +859,7 @@
       world.pointOfView({ lat: firstLegStart.latitude_deg, lng: firstLegStart.longitude_deg, altitude: 1.4 }, 1000);
     }
 
-    // 5. CHỌN SÂN BAY (TÍNH TOÁN GRADIENT FREQUENCIES XUNG QUANH CHẤM)
+    // 5. CHỌN SÂN BAY (TÍNH TOÁN RINGS GRADIENT DỰA TRÊN TẦN SỐ)
     function handleAirportSelect(point) {
       isRouteMode = false;
       selectedAirportId = point.ident;
@@ -850,23 +890,43 @@
         });
       }
 
-      // LẤY DỮ LIỆU TẦN SỐ ĐỂ TẠO GRADIENT RING DƯỚI NỀN
-      const airportFreqs = frequenciesMap[point.ident] || frequenciesMap[point.iata_code] || [];
+      // TRUY VẤN TẤT CẢ TẦN SỐ THEO IDENT, IATA VÀ REF ID
+      const aIdent = String(point.ident || '').trim().toUpperCase();
+      const aIata = String(point.iata_code || '').trim().toUpperCase();
+      const aRef = String(point.id || '').trim();
+
+      let airportFreqs = frequenciesByAirport.get(aIdent) || 
+                         frequenciesByAirport.get(aIata) || 
+                         frequenciesByAirport.get(aRef) || [];
+
+      // LỌC TRÙNG THEO ID HOẶC GIÁ TRỊ TẦN SỐ
+      const uniqueFreqs = [];
+      const seenF = new Set();
+      airportFreqs.forEach(f => {
+        const key = `${f.type}-${f.frequency_mhz || f.mhz || f.frequency}`;
+        if (!seenF.has(key)) {
+          seenF.add(key);
+          uniqueFreqs.push(f);
+        }
+      });
+      airportFreqs = uniqueFreqs;
+
       const freqCount = airportFreqs.length;
 
-      let ringBaseColor = '0, 243, 255'; // Cyan mặc định
-      if (point.isMilitary) ringBaseColor = '0, 255, 102'; // Green
-      else if (point.type === 'large_airport') ringBaseColor = '255, 0, 127'; // Pink
-      else ringBaseColor = '255, 230, 0'; // Yellow
+      // XÁC ĐỊNH MÀU SẮC ĐỒNG BỘ VỚI MÀU CHẤM SÂN BAY
+      let ringColorRgb = '0, 243, 255'; // Cyan
+      if (point.isMilitary) ringColorRgb = '0, 255, 102'; // Green
+      else if (point.type === 'large_airport') ringColorRgb = '255, 0, 127'; // Pink
+      else ringColorRgb = '255, 230, 0'; // Yellow
 
-      // Bán kính ring tỉ lệ với số tần số (tối thiểu 1.5, tối đa 5.5 độ cầu)
-      const ringRadius = Math.min(5.5, Math.max(1.5, 1.2 + freqCount * 0.4));
+      // BÁN KÍNH DIỆN TÍCH TỎA RA THEO SỐ LƯỢNG FREQUENCIES (DÙNG ĐỘ CẦU ĐỊA LÝ)
+      const maxCoverageRadius = Math.min(6.5, Math.max(1.8, 1.5 + freqCount * 0.45));
 
       world.ringsData([{
         latitude_deg: point.latitude_deg,
         longitude_deg: point.longitude_deg,
-        maxR: ringRadius,
-        color: t => `rgba(${ringBaseColor}, ${0.35 * (1 - t * t)})` // Mờ nhẹ tỏa dần ra ngoài
+        maxR: maxCoverageRadius,
+        color: t => `rgba(${ringColorRgb}, ${0.38 * Math.pow(1 - t, 1.8)})` // Gradient nhẹ mờ dần ra ngoài
       }]);
 
       world.arcsData(matchedRoutes);
@@ -911,7 +971,6 @@
         document.getElementById('airport-routes').style.color = 'var(--neon-cyan)';
       }
 
-      // RENDER CÁC THÀNH PHẦN CHI TIẾT
       renderIndividualRunways(point);
       renderFrequenciesSection(airportFreqs);
       renderCommentsSection(point);
@@ -925,7 +984,7 @@
       isRouteMode = false;
       
       world.arcsData([]);
-      world.ringsData([]); // Xóa vòng gradient
+      world.ringsData([]); 
       world.pointsData([...displayedAirports]);
 
       setTimeout(() => {
@@ -938,7 +997,7 @@
       world.height(window.innerHeight);
     });
 
-    // 6. RENDER BLUEPRINTS CHO TỪNG ĐƯỜNG BĂNG RIÊNG LẺ
+    // 6. RENDER MULTI-BLUEPRINTS
     function renderIndividualRunways(airport) {
       const grid = document.getElementById('blueprints-grid');
       const statusText = document.getElementById('blueprint-status');
@@ -1097,7 +1156,7 @@
       ctx.restore();
     }
 
-    // 7. RENDER DANH SÁCH TẦN SỐ VÔ TUYẾN
+    // 7. RENDER FREQUENCIES (KHẮC PHỤC TRIỆT ĐỂ LỖI NaN MHz)
     function renderFrequenciesSection(freqs) {
       const container = document.getElementById('frequencies-container');
       const badge = document.getElementById('freq-count-badge');
@@ -1110,13 +1169,20 @@
       }
 
       badge.innerText = `[${freqs.length} REGISTERED]`;
-      let rows = freqs.map(f => `
-        <tr>
-          <td style="color:var(--neon-green); font-weight:bold;">${f.type || 'COMM'}</td>
-          <td style="color:#fff;">${f.description || 'Airport Service'}</td>
-          <td style="color:var(--neon-cyan); font-weight:bold;">${Number(f.frequency_mhz).toFixed(3)} MHz</td>
-        </tr>
-      `).join('');
+      let rows = freqs.map(f => {
+        // Tìm giá trị tần số từ nhiều tên trường khác nhau và chuyển đổi an toàn
+        const rawMhz = f.frequency_mhz ?? f.mhz ?? f.frequency ?? f.freq;
+        const numMhz = parseFloat(rawMhz);
+        const displayMhz = (!isNaN(numMhz) && numMhz > 0) ? `${numMhz.toFixed(3)} MHz` : (rawMhz ? `${rawMhz} MHz` : '---');
+
+        return `
+          <tr>
+            <td style="color:var(--neon-green); font-weight:bold;">${f.type || 'COMM'}</td>
+            <td style="color:#fff;">${f.description || f.desc || 'Service'}</td>
+            <td style="color:var(--neon-cyan); font-weight:bold;">${displayMhz}</td>
+          </tr>
+        `;
+      }).join('');
 
       container.innerHTML = `
         <table class="freq-table">
@@ -1132,7 +1198,7 @@
       `;
     }
 
-    // 8. RENDER BÌNH LUẬN & PHẢN HỒI SÂN BAY
+    // 8. RENDER COMMENTS SECTION
     function renderCommentsSection(airport) {
       const container = document.getElementById('comments-container');
       const badge = document.getElementById('comments-count-badge');
@@ -1141,13 +1207,9 @@
       const aIdent = String(airport.ident || '').trim().toUpperCase();
       const aId = String(airport.id || '').trim();
 
-      const matched = commentsList.filter(c => {
-        const cIdent = String(c.airport_ident || '').trim().toUpperCase();
-        const cRef = String(c.airport_ref || '').trim();
-        return (cIdent && cIdent === aIdent) || (cRef && cRef === aId);
-      });
+      let matched = commentsByAirport.get(aIdent) || commentsByAirport.get(aId) || [];
 
-      if (matched.length === 0) {
+      if (!matched || matched.length === 0) {
         badge.innerText = '[0 LOGS]';
         container.innerHTML = `<div style="font-size:0.75rem; color:#888; padding:8px 0;">NO PILOT REPORTS / COMMENTS RECORDED</div>`;
         return;
@@ -1157,10 +1219,10 @@
       container.innerHTML = matched.map(c => `
         <div class="comment-item">
           <div class="comment-meta">
-            <span class="comment-author">${c.nickname || 'Anonymous'}</span>
-            <span>${c.date ? c.date.slice(0, 10) : '---'}</span>
+            <span class="comment-author">${c.member_nickname || c.nickname || 'Anonymous'}</span>
+            <span>${c.date ? String(c.date).slice(0, 10) : '---'}</span>
           </div>
-          <div class="comment-body">${c.body || 'No comment content provided.'}</div>
+          <div class="comment-body">${c.body || c.comment || 'No comment content provided.'}</div>
         </div>
       `).join('');
     }
