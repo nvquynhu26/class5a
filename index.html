@@ -155,16 +155,40 @@
     }
     .close-btn:hover { background: var(--neon-pink); color: #fff; }
 
-    #blueprint-container {
-      width: 100%; height: 320px; border: 1px dashed var(--neon-cyan);
-      margin-top: 15px; position: relative;
-      background: radial-gradient(circle, rgba(0, 243, 255, 0.05) 0%, rgba(10, 10, 15, 0.95) 100%);
-      display: flex; align-items: center; justify-content: center;
-      overflow: hidden;
+    /* LƯỚI CHỨA CÁC BLUEPRINT: MỖI HÀNG TỐI ĐA 2 Ô */
+    #blueprints-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 15px;
+      width: 100%;
     }
-    #blueprint-canvas {
-      width: 100%; height: 100%;
+
+    .blueprint-card {
+      border: 1px dashed var(--neon-cyan);
+      background: radial-gradient(circle, rgba(0, 243, 255, 0.05) 0%, rgba(10, 10, 15, 0.95) 100%);
+      padding: 8px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      position: relative;
+    }
+
+    .blueprint-card canvas {
+      width: 100%;
+      height: 180px;
       object-fit: contain;
+    }
+
+    .blueprint-card-info {
+      width: 100%;
+      margin-top: 6px;
+      border-top: 1px solid rgba(0, 243, 255, 0.2);
+      padding-top: 4px;
+      font-size: 0.72rem;
+      color: #88aacc;
+      display: flex;
+      justify-content: space-between;
     }
 
     .hud-title {
@@ -203,12 +227,12 @@
 
     <div class="hud-group" id="route-search-group">
       <div style="position:relative;">
-        <input type="text" id="route-from" class="hud-input" style="width:140px;" placeholder="FROM: SGN / HAN / ICN..." autocomplete="off">
+        <input type="text" id="route-from" class="hud-input" style="width:140px;" placeholder="FROM: ICN / SGN..." autocomplete="off">
         <ul id="from-autocomplete" class="autocomplete-list"></ul>
       </div>
       <span style="color:var(--neon-green); font-size:0.8rem;">&rarr;</span>
       <div style="position:relative;">
-        <input type="text" id="route-to" class="hud-input" style="width:140px;" placeholder="TO: JFK / NRT / CDG..." autocomplete="off">
+        <input type="text" id="route-to" class="hud-input" style="width:140px;" placeholder="TO: LAX / CDG..." autocomplete="off">
         <ul id="to-autocomplete" class="autocomplete-list"></ul>
       </div>
       <button class="hud-btn" id="btn-find-route">[ ROUTE ]</button>
@@ -239,10 +263,9 @@
           <p><strong>DIRECT ROUTES:</strong> <span id="airport-routes" style="color: var(--neon-cyan)">---</span></p>
           <p><strong>RUNWAYS DETECTED:</strong> <span id="airport-rws-count" style="color: var(--neon-yellow)">---</span></p>
           
-          <div id="blueprint-container">
-            <canvas id="blueprint-canvas" width="500" height="320"></canvas>
-          </div>
-          <div class="status-text" id="blueprint-status">> RUNWAY VECTOR BLUEPRINT LOADED [TRUE SCALE]</div>
+          <!-- KHU VỰC CHỨA CÁC BLUEPRINT RIÊNG BIỆT DẠNG GRID -->
+          <div id="blueprints-grid"></div>
+          <div class="status-text" id="blueprint-status">> SYSTEM IDLE</div>
         </div>
 
         <div id="itinerary-view">
@@ -268,12 +291,12 @@
     let isRouteMode = false;
     let currentCategory = 'all';
 
-    // Hàm tính góc cung bay (angular distance radian) giữa 2 tọa độ
-    function getArcAngleRad(d) {
-      const φ1 = d.startLat * Math.PI / 180;
-      const φ2 = d.endLat * Math.PI / 180;
-      const Δλ = (d.endLng - d.startLng) * Math.PI / 180;
-      const cosAngle = Math.sin(φ1) * Math.sin(φ2) + Math.cos(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+    // Hàm tính khoảng cách góc cầu (Radian)
+    function calcGreatCircleAngle(d) {
+      const phi1 = d.startLat * Math.PI / 180;
+      const phi2 = d.endLat * Math.PI / 180;
+      const delta = (d.endLng - d.startLng) * Math.PI / 180;
+      const cosAngle = Math.sin(phi1) * Math.sin(phi2) + Math.cos(phi1) * Math.cos(phi2) * Math.cos(delta);
       return Math.acos(Math.max(-1, Math.min(1, cosAngle)));
     }
 
@@ -305,24 +328,28 @@
         return 'rgba(40, 40, 60, 0.2)';
       })
       .pointResolution(32)
-      .arcColor(d => d.color || ['rgba(0, 243, 255, 0.95)', 'rgba(255, 0, 127, 0.95)'])
-      .arcStroke(0.18)
-      // TỰ ĐỘNG CHUẨN HÓA NÉT ĐỨT THEO CHIỀU DÀI: Dù bay xa hay gần nét luôn ngắn và đồng đều
+      .arcColor(d => d.color || ['rgba(0, 243, 255, 0.9)', 'rgba(255, 0, 127, 0.9)'])
+      .arcStroke(0.12)
+      
+      // XỬ LÝ NÉT ĐỨT VÀ TỐC ĐỘ THEO KHOẢNG CÁCH (CHỐNG KÉO GIÃN KHI BAY XA)
       .arcDashLength(d => {
-        const angle = getArcAngleRad(d);
-        return Math.max(0.008, Math.min(0.06, 0.04 / (angle + 0.3)));
+        const rad = calcGreatCircleAngle(d);
+        const factor = Math.max(0.6, rad / 0.5);
+        return Math.max(0.005, 0.06 / factor);
       })
       .arcDashGap(d => {
-        const angle = getArcAngleRad(d);
-        return Math.max(0.006, Math.min(0.04, 0.025 / (angle + 0.3)));
+        const rad = calcGreatCircleAngle(d);
+        const factor = Math.max(0.6, rad / 0.5);
+        return Math.max(0.004, 0.035 / factor);
       })
       .arcDashAnimateTime(d => {
-        const angle = getArcAngleRad(d);
-        return Math.max(1800, angle * 1800);
+        const rad = calcGreatCircleAngle(d);
+        // Đường bay càng xa thì thời gian càng dài để duy trì tốc độ chậm rãi, đồng đều
+        return Math.max(5000, rad * 3800);
       })
       .arcAltitude(d => {
-        const angle = getArcAngleRad(d);
-        return Math.max(0.08, (angle / Math.PI) * 0.45);
+        const angle = calcGreatCircleAngle(d);
+        return Math.max(0.08, (angle / Math.PI) * 0.42);
       })
       .onPointClick(point => {
         if (point) handleAirportSelect(point);
@@ -332,7 +359,7 @@
     world.controls().autoRotateSpeed = 0.1;
     world.controls().enableDamping = true;
     world.controls().minDistance = 115;
-    world.controls().maxDistance = 380; // Cho phép zoom out rộng rãi toàn cầu
+    world.controls().maxDistance = 380; // Cho phép zoom out rộng rãi
 
     // 2. DATA PIPELINE
     Promise.all([
@@ -375,8 +402,8 @@
       });
 
       routesList = routes.filter(r => {
-        const srcObj = airportsMap.get(r.src);
-        const dstObj = airportsMap.get(r.dst);
+        const srcObj = airportsMap.get(String(r.src).trim().toUpperCase());
+        const dstObj = airportsMap.get(String(r.dst).trim().toUpperCase());
         return srcObj && dstObj && srcObj.latitude_deg && dstObj.latitude_deg;
       });
 
@@ -401,9 +428,7 @@
           download: true, header: false, dynamicTyping: true,
           complete: res => {
             const cleanRoutes = res.data.map(r => ({
-              airline: r[0], 
-              src: String(r[2] || '').trim().toUpperCase(), 
-              dst: String(r[4] || '').trim().toUpperCase()
+              airline: r[0], src: r[2], dst: r[4]
             })).filter(r => r.src && r.dst);
             resolve(cleanRoutes);
           }
@@ -435,7 +460,6 @@
       return (s || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
     }
 
-    // 3. AUTOCOMPLETE
     function setupAutocompleteSystem() {
       setupSingleAutocomplete('search-input', 'airport-autocomplete', (selected) => {
         handleAirportSelect(selected);
@@ -522,7 +546,6 @@
       });
     }
 
-    // 4. ROUTE PATHFINDER
     const OPTION_COLORS = ['#00f3ff', '#ff00ea', '#ffe600', '#00ff66', '#ff7700', '#b026ff'];
 
     function resolveAirports(queryStr) {
@@ -558,8 +581,9 @@
 
       const graph = new Map();
       routesList.forEach(r => {
-        if (!graph.has(r.src)) graph.set(r.src, []);
-        graph.get(r.src).push(r);
+        const s = String(r.src).trim().toUpperCase();
+        if (!graph.has(s)) graph.set(s, []);
+        graph.get(s).push(r);
       });
 
       const foundOptions = [];
@@ -568,8 +592,8 @@
         const srcCodes = [origin.iata_code, origin.ident].filter(Boolean).map(s => s.toUpperCase());
 
         for (let sCode of srcCodes) {
-          (graph.get(sCode) || []).filter(r => destCodes.has(r.dst)).forEach(f => {
-            const destObj = airportsMap.get(f.dst);
+          (graph.get(sCode) || []).filter(r => destCodes.has(String(r.dst).trim().toUpperCase())).forEach(f => {
+            const destObj = airportsMap.get(String(f.dst).trim().toUpperCase());
             if (destObj && destObj.latitude_deg && foundOptions.length < 6) {
               foundOptions.push({
                 type: 'DIRECT FLIGHT',
@@ -580,13 +604,13 @@
 
           if (foundOptions.length < 6) {
             for (let leg1 of (graph.get(sCode) || [])) {
-              const transit = airportsMap.get(leg1.dst);
+              const transit = airportsMap.get(String(leg1.dst).trim().toUpperCase());
               if (!transit || !transit.latitude_deg || transit.ident === origin.ident) continue;
 
               const transitCodes = [transit.iata_code, transit.ident].filter(Boolean).map(s => s.toUpperCase());
               for (let tCode of transitCodes) {
-                for (let leg2 of ((graph.get(tCode) || []).filter(r => destCodes.has(r.dst)))) {
-                  const finalDest = airportsMap.get(leg2.dst);
+                for (let leg2 of ((graph.get(tCode) || []).filter(r => destCodes.has(String(r.dst).trim().toUpperCase())))) {
+                  const finalDest = airportsMap.get(String(leg2.dst).trim().toUpperCase());
                   if (finalDest && finalDest.latitude_deg && finalDest.ident !== transit.ident) {
                     const dup = foundOptions.some(opt => 
                       opt.legs.length === 2 && 
@@ -666,10 +690,9 @@
       setTimeout(() => { world.width(window.innerWidth / 2); }, 100);
 
       const firstLegStart = foundOptions[0].legs[0].from;
-      world.pointOfView({ lat: firstLegStart.latitude_deg, lng: firstLegStart.longitude_deg, altitude: 1.5 }, 1000);
+      world.pointOfView({ lat: firstLegStart.latitude_deg, lng: firstLegStart.longitude_deg, altitude: 1.4 }, 1000);
     }
 
-    // 5. CHỌN SÂN BAY
     function handleAirportSelect(point) {
       isRouteMode = false;
       selectedAirportId = point.ident;
@@ -680,13 +703,14 @@
 
       const isSmall = point.type === 'small_airport' || point.type === 'closed';
       const matchedRoutes = [];
-      const codeIATA = (point.iata_code || '').toUpperCase();
-      const codeICAO = (point.ident || '').toUpperCase();
+      const codeIATA = String(point.iata_code || '').trim().toUpperCase();
+      const codeICAO = String(point.ident || '').trim().toUpperCase();
 
       if (!isSmall) {
         routesList.forEach(r => {
-          if (r.src === codeIATA || r.src === codeICAO) {
-            const target = airportsMap.get(r.dst);
+          const s = String(r.src || '').trim().toUpperCase();
+          if (s === codeIATA || s === codeICAO) {
+            const target = airportsMap.get(String(r.dst).trim().toUpperCase());
             if (target && target.latitude_deg && target.longitude_deg) {
               connectedAirportIds.add(r.dst);
               matchedRoutes.push({
@@ -741,7 +765,8 @@
         document.getElementById('airport-routes').style.color = 'var(--neon-cyan)';
       }
 
-      drawRunwayBlueprint2D(point);
+      // Xây dựng danh sách Blueprint riêng lẻ cho từng đường băng
+      renderIndividualRunways(point);
     }
 
     function closePanel() {
@@ -764,178 +789,172 @@
       world.height(window.innerHeight);
     });
 
-    // 6. THUẬT TOÁN VẼ RUNWAY ĐÃ KHẮC PHỤC TRIỆT ĐỂ LỖI CHỒNG ĐÈ
-    function drawRunwayBlueprint2D(airport) {
-      const canvas = document.getElementById('blueprint-canvas');
+    // 6. RENDER MULTI-BLUEPRINTS (MỖI ĐƯỜNG BĂNG 1 Ô BLUEPRINT ĐỘC LẬP)
+    function renderIndividualRunways(airport) {
+      const grid = document.getElementById('blueprints-grid');
       const statusText = document.getElementById('blueprint-status');
-      if (!canvas) return;
-      
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+      grid.innerHTML = '';
 
-      const cx = 250;
-      const cy = 160;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
+      // Trường hợp sân bay quân sự bảo mật
       if (airport.isMilitary) {
         document.getElementById('airport-rws-count').innerText = `RESTRICTED`;
         statusText.innerText = `> ACCESS DENIED: CLASSIFIED MILITARY ASSET`;
         statusText.style.color = `var(--neon-red)`;
 
-        ctx.strokeStyle = 'rgba(255, 42, 42, 0.25)';
+        const militaryCard = document.createElement('div');
+        militaryCard.className = 'blueprint-card';
+        militaryCard.style.gridColumn = 'span 2';
+        militaryCard.innerHTML = `
+          <canvas width="400" height="180"></canvas>
+          <div class="blueprint-card-info" style="color:var(--neon-red); justify-content:center;">
+            SECURITY LEVEL 5 - ASSET CLASSIFIED
+          </div>
+        `;
+        grid.appendChild(militaryCard);
+
+        const canvas = militaryCard.querySelector('canvas');
+        const ctx = canvas.getContext('2d');
+        const cx = 200, cy = 90;
+        ctx.strokeStyle = '#ff2a2a';
         ctx.lineWidth = 1;
-        [45, 85, 130].forEach(r => {
+        [30, 60].forEach(r => {
           ctx.beginPath();
           ctx.arc(cx, cy, r, 0, Math.PI * 2);
           ctx.stroke();
         });
-
-        ctx.strokeStyle = '#ff2a2a';
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(cx - 140, cy - 40, 280, 80);
-        ctx.fillStyle = 'rgba(255, 42, 42, 0.12)';
-        ctx.fillRect(cx - 140, cy - 40, 280, 80);
-
         ctx.fillStyle = '#ff2a2a';
         ctx.font = 'bold 12px "Share Tech Mono"';
         ctx.textAlign = 'center';
-        ctx.fillText('TOP SECRET // NOFORN', cx, cy - 14);
-        ctx.font = '10px "Share Tech Mono"';
-        ctx.fillText('TACTICAL BLUEPRINT CLASSIFIED', cx, cy + 4);
-        ctx.fillText('SATELLITE SCRAMBLE ACTIVE', cx, cy + 20);
+        ctx.fillText('TOP SECRET // NOFORN', cx, cy - 6);
+        ctx.font = '9px "Share Tech Mono"';
+        ctx.fillText('TACTICAL BLUEPRINT SCRAMBLED', cx, cy + 12);
         return;
       }
 
-      ctx.strokeStyle = 'rgba(0, 243, 255, 0.18)';
+      // Tìm kiếm toàn diện trong runwaysList
+      const aIdent = String(airport.ident || '').trim().toUpperCase();
+      const aIata = String(airport.iata_code || '').trim().toUpperCase();
+      const aRef = String(airport.id || '').trim();
+
+      const matchedRunways = runwaysList.filter(r => {
+        const rIdent = String(r.airport_ident || '').trim().toUpperCase();
+        const rRef = String(r.airport_ref || '').trim();
+        return (rIdent && (rIdent === aIdent || (aIata && rIdent === aIata))) ||
+               (aRef && rRef && rRef === aRef);
+      });
+
+      // Nếu không có dữ liệu đường băng
+      if (matchedRunways.length === 0) {
+        document.getElementById('airport-rws-count').innerText = `NO DATA`;
+        statusText.style.color = `#888888`;
+        statusText.innerText = `> NO RUNWAY GEOMETRY DATA AVAILABLE`;
+
+        const noDataCard = document.createElement('div');
+        noDataCard.className = 'blueprint-card';
+        noDataCard.style.gridColumn = 'span 2';
+        noDataCard.innerHTML = `
+          <div style="padding: 40px 10px; text-align: center; color: #888;">
+            <div style="font-size: 0.9rem; color: #aaa; margin-bottom: 5px;">[ NO RUNWAY DATA IN DATABASE ]</div>
+            <div style="font-size: 0.75rem;">UNPAVED / LOCAL STRIP / ELEVATION PROFILE ONLY</div>
+          </div>
+        `;
+        grid.appendChild(noDataCard);
+        return;
+      }
+
+      document.getElementById('airport-rws-count').innerText = `${matchedRunways.length} Runway(s)`;
+      statusText.style.color = `var(--neon-green)`;
+      statusText.innerText = `> MULTI-VECTOR BLUEPRINTS LOADED [${matchedRunways.length} INDEPENDENT MODULES]`;
+
+      // Tạo Blueprint riêng cho từng đường băng
+      matchedRunways.forEach((rw, idx) => {
+        let hdg = rw.heading_degT;
+        if (hdg === null || hdg === undefined || isNaN(hdg)) {
+          const match = String(rw.le_ident || '').match(/\d+/);
+          hdg = match ? parseInt(match[0], 10) * 10 : 90;
+        }
+
+        const rwIdentText = `${rw.le_ident || 'RWY'} / ${rw.he_ident || '---'}`;
+        const card = document.createElement('div');
+        card.className = 'blueprint-card';
+        card.innerHTML = `
+          <canvas width="250" height="180"></canvas>
+          <div class="blueprint-card-info">
+            <span style="color:var(--neon-cyan); font-weight:bold;">${rwIdentText}</span>
+            <span>${rw.length_ft || 'N/A'}ft x ${rw.width_ft || 'N/A'}ft</span>
+            <span style="color:var(--neon-yellow);">${Math.round(hdg)}°</span>
+          </div>
+        `;
+        grid.appendChild(card);
+
+        const canvas = card.querySelector('canvas');
+        drawSingleRunwayCanvas(canvas, rw, hdg);
+      });
+    }
+
+    function drawSingleRunwayCanvas(canvas, rw, heading) {
+      const ctx = canvas.getContext('2d');
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // La bàn tọa độ nền
+      ctx.strokeStyle = 'rgba(0, 243, 255, 0.15)';
       ctx.lineWidth = 1;
-      [45, 85, 130].forEach(r => {
+      [35, 65].forEach(r => {
         ctx.beginPath();
         ctx.arc(cx, cy, r, 0, Math.PI * 2);
         ctx.stroke();
       });
 
       ctx.beginPath();
-      ctx.moveTo(cx, cy - 140); ctx.lineTo(cx, cy + 140);
-      ctx.moveTo(cx - 140, cy); ctx.lineTo(cx + 140, cy);
+      ctx.moveTo(cx, cy - 70); ctx.lineTo(cx, cy + 70);
+      ctx.moveTo(cx - 70, cy); ctx.lineTo(cx + 70, cy);
       ctx.stroke();
 
       ctx.fillStyle = '#00f3ff';
-      ctx.font = '10px "Share Tech Mono"';
+      ctx.font = '8px "Share Tech Mono"';
       ctx.textAlign = 'center';
-      ctx.fillText('N (000°)', cx, cy - 144);
-      ctx.fillText('S (180°)', cx, cy + 152);
-      ctx.fillText('E', cx + 146, cy + 4);
-      ctx.fillText('W', cx - 146, cy + 4);
+      ctx.fillText('N', cx, cy - 74);
+      ctx.fillText('S', cx, cy + 80);
+      ctx.fillText('E', cx + 78, cy + 3);
+      ctx.fillText('W', cx - 78, cy + 3);
 
-      // KHẮC PHỤC LỖI TÌM RUNWAY: Quét toàn diện ICAO, IATA, airport_ref dạng số và chuỗi
-      const aIdent = String(airport.ident || '').trim().toUpperCase();
-      const aIata = String(airport.iata_code || '').trim().toUpperCase();
-      const aId = String(airport.id || '').trim();
+      // Kích thước chuẩn hóa theo canvas 250x180
+      const lenFt = rw.length_ft || 7500;
+      const lengthPx = Math.min(Math.max(lenFt / 80, 80), 130);
+      const widthPx = Math.max((rw.width_ft || 150) / 12, 10);
+      const rad = (heading * Math.PI) / 180;
 
-      let matchedRunways = runwaysList.filter(r => {
-        const rIdent = String(r.airport_ident || '').trim().toUpperCase();
-        const rRef = String(r.airport_ref || '').trim();
-        return (rIdent && (rIdent === aIdent || rIdent === aIata)) ||
-               (rRef && (rRef === aId || rRef === aIdent));
-      });
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rad);
 
-      if (matchedRunways.length === 0) {
-        document.getElementById('airport-rws-count').innerText = `NO DATA`;
-        statusText.style.color = `#888888`;
-        statusText.innerText = `> NO RUNWAY GEOMETRY DATA AVAILABLE`;
+      // Thân đường băng
+      ctx.fillStyle = 'rgba(0, 243, 255, 0.28)';
+      ctx.strokeStyle = '#00f3ff';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
+      ctx.strokeRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
 
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
-        ctx.setLineDash([4, 4]);
-        ctx.strokeRect(cx - 130, cy - 35, 260, 70);
-        ctx.setLineDash([]);
-        
-        ctx.fillStyle = '#888888';
-        ctx.font = '11px "Share Tech Mono"';
-        ctx.textAlign = 'center';
-        ctx.fillText('RUNWAY VECTOR DATA NOT FOUND', cx, cy - 5);
-        ctx.font = '9px "Share Tech Mono"';
-        ctx.fillText('TERRAIN OR GRASS STRIP UNMAPPED', cx, cy + 12);
-        return;
-      }
+      // Vạch tim màu vàng nét đứt
+      ctx.strokeStyle = '#ffe600';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, -lengthPx / 2 + 6);
+      ctx.lineTo(0, lengthPx / 2 - 6);
+      ctx.stroke();
+      ctx.setLineDash([]);
 
-      statusText.style.color = `var(--neon-green)`;
-      statusText.innerText = `> RUNWAY VECTOR BLUEPRINT LOADED [TRUE SCALE]`;
-      document.getElementById('airport-rws-count').innerText = `${matchedRunways.length} Runway(s)`;
+      // Nhãn số hiệu 2 đầu đường băng
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 8px "Share Tech Mono"';
+      ctx.textAlign = 'center';
+      if (rw.le_ident) ctx.fillText(rw.le_ident, 0, lengthPx / 2 - 4);
+      if (rw.he_ident) ctx.fillText(rw.he_ident, 0, -lengthPx / 2 + 10);
 
-      // Phân nhóm các đường băng theo góc hướng song song
-      const groups = [];
-      matchedRunways.forEach(r => {
-        let hdg = r.heading_degT;
-        if (hdg === null || hdg === undefined || isNaN(hdg)) {
-          const match = (r.le_ident || '').match(/\d+/);
-          hdg = match ? parseInt(match[0], 10) * 10 : 70;
-        }
-        r.validHeading = hdg;
-        
-        const normHdg = ((hdg % 180) + 180) % 180;
-        let foundGroup = groups.find(g => Math.abs(g.baseAngle - normHdg) < 15 || Math.abs(g.baseAngle - normHdg) > 165);
-        if (foundGroup) {
-          foundGroup.items.push(r);
-        } else {
-          groups.push({ baseAngle: normHdg, items: [r] });
-        }
-      });
-
-      // VẼ TỪNG NHÓM ĐƯỜNG BĂNG VỚI CÔNG THỨC DỜI ĐỐI XỨNG TUYỆT ĐỐI
-      groups.forEach(g => {
-        const total = g.items.length;
-        
-        // Sắp xếp các đường băng song song theo thứ tự định danh (L -> C -> R) để vẽ tự nhiên từ trái sang phải
-        g.items.sort((a, b) => String(a.le_ident || '').localeCompare(String(b.le_ident || '')));
-
-        // Khoảng cách giữa các tim đường băng song song trên bản vẽ
-        const spacing = total > 3 ? 32 : (total > 2 ? 38 : 46);
-
-        g.items.forEach((r, idx) => {
-          const lenFt = r.length_ft || 7500;
-          const lengthPx = Math.min(Math.max(lenFt / 52, 110), 220);
-          const widthPx = Math.max((r.width_ft || 150) / 14, 9);
-          const rad = (r.validHeading * Math.PI) / 180;
-
-          // BẢO ĐẢM KHÔNG BAO GIỜ CHỒNG ĐÈ: Mỗi đường băng có 1 offset index duy nhất
-          const offsetPx = (idx - (total - 1) / 2) * spacing;
-
-          // Dịch chuyển vuông góc với hướng đường băng (cộng thêm 90 độ)
-          const perpAngle = rad + Math.PI / 2;
-          const offX = offsetPx * Math.cos(perpAngle);
-          const offY = offsetPx * Math.sin(perpAngle);
-
-          ctx.save();
-          ctx.translate(cx + offX, cy + offY);
-          ctx.rotate(rad);
-
-          // Thân đường băng
-          ctx.fillStyle = 'rgba(0, 243, 255, 0.22)';
-          ctx.strokeStyle = '#00f3ff';
-          ctx.lineWidth = 1.4;
-          ctx.fillRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
-          ctx.strokeRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
-
-          // Vạch tim đường băng
-          ctx.strokeStyle = '#ffe600';
-          ctx.lineWidth = 1.2;
-          ctx.setLineDash([5, 4]);
-          ctx.beginPath();
-          ctx.moveTo(0, -lengthPx / 2 + 6);
-          ctx.lineTo(0, lengthPx / 2 - 6);
-          ctx.stroke();
-          ctx.setLineDash([]);
-
-          // Số hiệu 2 đầu đường băng
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 9px "Share Tech Mono"';
-          ctx.textAlign = 'center';
-          if (r.le_ident) ctx.fillText(r.le_ident, 0, lengthPx / 2 - 5);
-          if (r.he_ident) ctx.fillText(r.he_ident, 0, -lengthPx / 2 + 12);
-
-          ctx.restore();
-        });
-      });
+      ctx.restore();
     }
   </script>
 </body>
