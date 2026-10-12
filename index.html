@@ -469,4 +469,864 @@
     // 1. GLOBE INITIALIZATION
     const world = Globe()(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
-      .backgroundColor('#0a0
+      .backgroundColor('#0a0a0f')
+      .showAtmosphere(true)
+      .atmosphereColor('#00f3ff')
+      .atmosphereAltitude(0.12)
+      .pointLat('latitude_deg')
+      .pointLng('longitude_deg')
+      .pointAltitude(0) // XÓA BỎ HOÀN TOÀN CHIỀU CAO (DÁN SÁT MẶT ĐẤT)
+      .pointRadius(d => {
+        if (!selectedAirportId && !isRouteMode) {
+          return d.isMilitary ? 0.28 : (d.type === 'large_airport' ? 0.38 : 0.16);
+        }
+        if (d.ident === selectedAirportId) return 0.65;
+        if (connectedAirportIds.has(d.iata_code) || connectedAirportIds.has(d.ident)) return 0.35;
+        return 0.05;
+      })
+      .pointColor(d => {
+        if (!selectedAirportId && !isRouteMode) {
+          if (d.isMilitary) return '#00ff66';
+          return d.type === 'large_airport' ? '#ff007f' : '#ffe600';
+        }
+        if (d.ident === selectedAirportId) return '#ffffff';
+        if (connectedAirportIds.has(d.iata_code) || connectedAirportIds.has(d.ident)) return '#00f3ff';
+        return 'rgba(40, 40, 60, 0.2)';
+      })
+      .pointResolution(32)
+      .ringLat('latitude_deg')
+      .ringLng('longitude_deg')
+      .ringAltitude(0) // Vòng tròn gradient dán sát địa cầu
+      .ringColor(d => d.color)
+      .ringMaxRadius('maxR')
+      .ringPropagationSpeed(1.2)
+      .ringRepeatPeriod(2800)
+      .arcColor(d => d.color || ['rgba(0, 243, 255, 0.9)', 'rgba(255, 0, 127, 0.9)'])
+      .arcStroke(0.12)
+      .arcDashLength(d => {
+        const rad = calcGreatCircleAngle(d);
+        const factor = Math.max(0.6, rad / 0.5);
+        return Math.max(0.005, 0.06 / factor);
+      })
+      .arcDashGap(d => {
+        const rad = calcGreatCircleAngle(d);
+        const factor = Math.max(0.6, rad / 0.5);
+        return Math.max(0.004, 0.035 / factor);
+      })
+      .arcDashAnimateTime(d => {
+        const rad = calcGreatCircleAngle(d);
+        return Math.max(10000, rad * 7600); // Chậm lại 0.5 lần
+      })
+      .arcAltitude(d => {
+        const angle = calcGreatCircleAngle(d);
+        return Math.max(0.08, (angle / Math.PI) * 0.42);
+      })
+      .onPointClick(point => {
+        if (point) handleAirportSelect(point);
+      });
+
+    world.controls().autoRotate = true;
+    world.controls().autoRotateSpeed = 0.1;
+    world.controls().enableDamping = true;
+    world.controls().minDistance = 115;
+    world.controls().maxDistance = 380;
+
+    // 2. DATA PIPELINE
+    Promise.all([
+      fetchCSV('countries.csv'),
+      fetchCSV('airports.csv'),
+      fetchCSV('runways.csv'),
+      fetchRoutes('routes.dat'),
+      fetchJSON('airport_frequencies_map.json').catch(() => null),
+      fetchCSV('airport_frequencies.csv').catch(() => []),
+      fetchCSV('airport_comments.csv').catch(() => [])
+    ]).then(([countries, airports, runways, routes, freqMapJson, freqCsv, comments]) => {
+      countries.forEach(c => countriesMap.set(c.code, c.name));
+
+      allAirportsList = airports.filter(d => 
+        d.latitude_deg && d.longitude_deg &&
+        (d.type === 'large_airport' || d.type === 'medium_airport' || d.type === 'small_airport')
+      ).map(a => {
+        const nameLower = (a.name || '').toLowerCase();
+        const typeLower = (a.type || '').toLowerCase();
+        
+        let isMilitary = false;
+        if (typeLower !== 'large_airport') {
+          isMilitary = nameLower.includes('air force base') || 
+                       nameLower.includes('afb') || 
+                       nameLower.includes('military airport') || 
+                       nameLower.includes('naval air station') || 
+                       nameLower.includes('army airfield') || 
+                       nameLower.includes('nas ') || 
+                       typeLower === 'military';
+        }
+
+        return {
+          ...a,
+          isMilitary: isMilitary,
+          countryName: countriesMap.get(a.iso_country) || a.iso_country || ''
+        };
+      });
+      
+      allAirportsList.forEach(a => {
+        if (a.ident) airportsMap.set(String(a.ident).trim().toUpperCase(), a);
+        if (a.iata_code) airportsMap.set(String(a.iata_code).trim().toUpperCase(), a);
+        if (a.id) airportsMap.set(String(a.id).trim(), a);
+      });
+
+      routesList = routes.filter(r => {
+        const srcObj = airportsMap.get(String(r.src).trim().toUpperCase());
+        const dstObj = airportsMap.get(String(r.dst).trim().toUpperCase());
+        return srcObj && dstObj && srcObj.latitude_deg && dstObj.latitude_deg;
+      });
+
+      runwaysList = runways;
+
+      // XỬ LÝ FREQUENCIES
+      if (freqMapJson && typeof freqMapJson === 'object' && Object.keys(freqMapJson).length > 0) {
+        Object.keys(freqMapJson).forEach(key => {
+          frequenciesByAirport.set(String(key).trim().toUpperCase(), freqMapJson[key]);
+        });
+      } else if (Array.isArray(freqCsv) && freqCsv.length > 0) {
+        freqCsv.forEach(item => {
+          const identKey = item.airport_ident ? String(item.airport_ident).trim().toUpperCase() : null;
+          const refKey = item.airport_ref ? String(item.airport_ref).trim() : null;
+          
+          if (identKey) {
+            if (!frequenciesByAirport.has(identKey)) frequenciesByAirport.set(identKey, []);
+            frequenciesByAirport.get(identKey).push(item);
+          }
+          if (refKey) {
+            if (!frequenciesByAirport.has(refKey)) frequenciesByAirport.set(refKey, []);
+            frequenciesByAirport.get(refKey).push(item);
+          }
+        });
+      }
+
+      // XỬ LÝ COMMENTS + BỘ LỌC QUẢNG CÁO RÁC (ANTI-SPAM)
+      if (Array.isArray(comments) && comments.length > 0) {
+        const spamPattern = /invest|crypto|bitcoin|telegramm?:|whatsapp|agriinvest|agroinvestment|diamond starter|platinum growth|emerald pro|returns are guaranteed|no risks involved|minimum \$\d+|forex|binary option|loan/i;
+        
+        comments.forEach(c => {
+          const textCheck = `${c.member_nickname || ''} ${c.subject || ''} ${c.body || ''}`;
+          if (spamPattern.test(textCheck)) {
+            return; // Loại bỏ comment spam
+          }
+
+          const cIdent = c.airport_ident ? String(c.airport_ident).trim().toUpperCase() : null;
+          const cRef = c.airport_ref ? String(c.airport_ref).trim() : null;
+
+          if (cIdent) {
+            if (!commentsByAirport.has(cIdent)) commentsByAirport.set(cIdent, []);
+            commentsByAirport.get(cIdent).push(c);
+          }
+          if (cRef) {
+            if (!commentsByAirport.has(cRef)) commentsByAirport.set(cRef, []);
+            commentsByAirport.get(cRef).push(c);
+          }
+        });
+      }
+
+      applyFilter();
+      setupAutocompleteSystem();
+    });
+
+    function fetchCSV(filename) {
+      return new Promise(resolve => {
+        Papa.parse(filename, {
+          download: true, header: true, dynamicTyping: true, skipEmptyLines: true,
+          complete: res => resolve(res.data)
+        });
+      });
+    }
+
+    function fetchJSON(filename) {
+      return fetch(filename).then(res => {
+        if (!res.ok) throw new Error('Network error');
+        return res.json();
+      });
+    }
+
+    function fetchRoutes(filename) {
+      return new Promise(resolve => {
+        Papa.parse(filename, {
+          download: true, header: false, dynamicTyping: true, skipEmptyLines: true,
+          complete: res => {
+            const cleanRoutes = res.data.map(r => ({
+              airline: r[0], src: r[2], dst: r[4]
+            })).filter(r => r.src && r.dst);
+            resolve(cleanRoutes);
+          }
+        });
+      });
+    }
+
+    function setCategoryFilter(category) {
+      currentCategory = category;
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      applyFilter();
+    }
+
+    function applyFilter() {
+      if (currentCategory === 'all') {
+        displayedAirports = [...allAirportsList];
+      } else if (currentCategory === 'large') {
+        displayedAirports = allAirportsList.filter(a => a.type === 'large_airport' && !a.isMilitary);
+      } else if (currentCategory === 'medium') {
+        displayedAirports = allAirportsList.filter(a => (a.type === 'medium_airport' || a.type === 'small_airport') && !a.isMilitary);
+      } else if (currentCategory === 'military') {
+        displayedAirports = allAirportsList.filter(a => a.isMilitary);
+      }
+
+      // NẾU ĐANG CHỌN SÂN BAY: Bắt buộc giữ lại cả sân bay đã chọn và TẤT CẢ các sân bay kết nối
+      if (selectedAirportId) {
+        const selectedAirport = airportsMap.get(selectedAirportId);
+        const forceShowSet = new Map();
+        
+        displayedAirports.forEach(a => forceShowSet.set(a.ident, a));
+        if (selectedAirport) forceShowSet.set(selectedAirport.ident, selectedAirport);
+
+        connectedAirportIds.forEach(id => {
+          const connAir = airportsMap.get(id);
+          if (connAir) forceShowSet.set(connAir.ident, connAir);
+        });
+
+        displayedAirports = Array.from(forceShowSet.values());
+      }
+
+      world.pointsData(displayedAirports);
+    }
+
+    function cleanStr(s) {
+      return (s || '').toString().toLowerCase().replace(/[\s\-_]/g, '');
+    }
+
+    function setupAutocompleteSystem() {
+      setupSingleAutocomplete('search-input', 'airport-autocomplete', (selected) => {
+        handleAirportSelect(selected);
+      });
+
+      setupSingleAutocomplete('route-from', 'from-autocomplete', (selected) => {
+        document.getElementById('route-from').value = selected.iata_code || selected.ident;
+      });
+
+      setupSingleAutocomplete('route-to', 'to-autocomplete', (selected) => {
+        document.getElementById('route-to').value = selected.iata_code || selected.ident;
+      });
+
+      document.getElementById('btn-find-airport').addEventListener('click', () => {
+        const val = cleanStr(document.getElementById('search-input').value);
+        const match = allAirportsList.find(a => 
+          cleanStr(a.iata_code) === val || cleanStr(a.ident) === val || cleanStr(a.name).includes(val)
+        );
+        if (match) handleAirportSelect(match);
+      });
+
+      document.getElementById('btn-find-route').addEventListener('click', executeRoutePathfinder);
+    }
+
+    function setupSingleAutocomplete(inputId, listId, onSelectCallback) {
+      const input = document.getElementById(inputId);
+      const list = document.getElementById(listId);
+
+      input.addEventListener('input', () => {
+        const query = cleanStr(input.value);
+        if (query.length < 2) {
+          list.style.display = 'none';
+          return;
+        }
+
+        const matched = allAirportsList.filter(a => {
+          return cleanStr(a.name).includes(query) ||
+                 cleanStr(a.iata_code).includes(query) ||
+                 cleanStr(a.ident).includes(query) ||
+                 cleanStr(a.municipality).includes(query) ||
+                 cleanStr(a.countryName).includes(query);
+        });
+
+        matched.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        const topResults = matched.slice(0, 10);
+
+        if (topResults.length > 0) {
+          list.innerHTML = topResults.map(a => `
+            <li data-ident="${a.ident}">
+              <strong style="color:var(--neon-green)">${a.iata_code || a.ident}</strong> - ${a.name}
+              <div style="font-size:0.7rem; color:#888;">${a.municipality || 'N/A'}, ${a.countryName}</div>
+            </li>
+          `).join('');
+          list.style.display = 'block';
+        } else {
+          list.style.display = 'none';
+        }
+      });
+
+      list.addEventListener('click', e => {
+        const li = e.target.closest('li');
+        if (!li) return;
+        const target = airportsMap.get(String(li.getAttribute('data-ident')).trim().toUpperCase());
+        if (target) {
+          input.value = `${target.name} (${target.iata_code || target.ident})`;
+          list.style.display = 'none';
+          onSelectCallback(target);
+        }
+      });
+
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') {
+          const first = list.querySelector('li');
+          if (first) first.click();
+          else if (inputId === 'search-input') document.getElementById('btn-find-airport').click();
+          else if (inputId === 'route-to') executeRoutePathfinder();
+        }
+      });
+
+      document.addEventListener('click', e => {
+        if (!input.contains(e.target) && !list.contains(e.target)) {
+          list.style.display = 'none';
+        }
+      });
+    }
+
+    const OPTION_COLORS = ['#00f3ff', '#ff00ea', '#ffe600', '#00ff66', '#ff7700', '#b026ff'];
+
+    function resolveAirports(queryStr) {
+      const q = cleanStr(queryStr);
+      if (!q) return [];
+      return allAirportsList.filter(a => 
+        cleanStr(a.iso_country) === q ||
+        cleanStr(a.countryName) === q ||
+        cleanStr(a.iata_code) === q ||
+        cleanStr(a.ident) === q ||
+        cleanStr(a.municipality).includes(q) ||
+        cleanStr(a.name).includes(q)
+      );
+    }
+
+    function executeRoutePathfinder() {
+      const fromQuery = document.getElementById('route-from').value;
+      const toQuery = document.getElementById('route-to').value;
+
+      const origins = resolveAirports(fromQuery);
+      const dests = resolveAirports(toQuery);
+
+      if (origins.length === 0 || dests.length === 0) {
+        alert("NO MATCHING DEPARTURE OR ARRIVAL LOCATION FOUND.");
+        return;
+      }
+
+      const destCodes = new Set();
+      dests.forEach(a => {
+        if (a.iata_code) destCodes.add(a.iata_code.toUpperCase());
+        if (a.ident) destCodes.add(a.ident.toUpperCase());
+      });
+
+      const graph = new Map();
+      routesList.forEach(r => {
+        const s = String(r.src).trim().toUpperCase();
+        if (!graph.has(s)) graph.set(s, []);
+        graph.get(s).push(r);
+      });
+
+      const foundOptions = [];
+
+      for (let origin of origins) {
+        const srcCodes = [origin.iata_code, origin.ident].filter(Boolean).map(s => s.toUpperCase());
+
+        for (let sCode of srcCodes) {
+          (graph.get(sCode) || []).filter(r => destCodes.has(String(r.dst).trim().toUpperCase())).forEach(f => {
+            const destObj = airportsMap.get(String(f.dst).trim().toUpperCase());
+            if (destObj && destObj.latitude_deg && foundOptions.length < 6) {
+              foundOptions.push({
+                type: 'DIRECT FLIGHT',
+                legs: [{ from: origin, to: destObj, airline: f.airline }]
+              });
+            }
+          });
+
+          if (foundOptions.length < 6) {
+            for (let leg1 of (graph.get(sCode) || [])) {
+              const transit = airportsMap.get(String(leg1.dst).trim().toUpperCase());
+              if (!transit || !transit.latitude_deg || transit.ident === origin.ident) continue;
+
+              const transitCodes = [transit.iata_code, transit.ident].filter(Boolean).map(s => s.toUpperCase());
+              for (let tCode of transitCodes) {
+                for (let leg2 of ((graph.get(tCode) || []).filter(r => destCodes.has(String(r.dst).trim().toUpperCase())))) {
+                  const finalDest = airportsMap.get(String(leg2.dst).trim().toUpperCase());
+                  if (finalDest && finalDest.latitude_deg && finalDest.ident !== transit.ident) {
+                    const dup = foundOptions.some(opt => 
+                      opt.legs.length === 2 && 
+                      opt.legs[0].to.ident === transit.ident && 
+                      opt.legs[1].to.ident === finalDest.ident
+                    );
+                    if (!dup && foundOptions.length < 6) {
+                      foundOptions.push({
+                        type: `1-STOP VIA ${transit.municipality || transit.name}`,
+                        legs: [
+                          { from: origin, to: transit, airline: leg1.airline },
+                          { from: transit, to: finalDest, airline: leg2.airline }
+                        ]
+                      });
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (foundOptions.length === 0) {
+        alert("NO FLIGHT ROUTE DATA AVAILABLE FOR THIS CITY PAIR.");
+        return;
+      }
+
+      isRouteMode = true;
+      selectedAirportId = null;
+      connectedAirportIds.clear();
+
+      document.getElementById('airport-details-view').style.display = 'none';
+      document.getElementById('itinerary-view').style.display = 'block';
+
+      const allArcs = [];
+      const highAirports = new Set();
+      const itList = document.getElementById('itinerary-list');
+      itList.innerHTML = '';
+
+      foundOptions.forEach((opt, idx) => {
+        const color = OPTION_COLORS[idx % OPTION_COLORS.length];
+
+        let legsHtml = opt.legs.map((leg, lIdx) => {
+          highAirports.add(leg.from.ident);
+          highAirports.add(leg.to.ident);
+
+          allArcs.push({
+            startLat: leg.from.latitude_deg, startLng: leg.from.longitude_deg,
+            endLat: leg.to.latitude_deg, endLng: leg.to.longitude_deg,
+            color: color
+          });
+
+          return `
+            <div style="margin-top:4px;">
+              [Leg ${lIdx+1}] <strong>${leg.from.iata_code || leg.from.ident}</strong> (${leg.from.municipality || leg.from.countryName})
+              &rarr; <strong>${leg.to.iata_code || leg.to.ident}</strong> (${leg.to.municipality || leg.to.countryName})
+              <span style="color:${color};">[Air: ${leg.airline || 'N/A'}]</span>
+            </div>
+          `;
+        }).join('');
+
+        itList.innerHTML += `
+          <div class="route-card" style="border-left: 4px solid ${color};">
+            <strong style="color:${color}; font-size:0.9rem;">OPTION ${idx+1}: ${opt.type}</strong>
+            ${legsHtml}
+          </div>
+        `;
+      });
+
+      connectedAirportIds = highAirports;
+      world.arcsData(allArcs);
+      world.ringsData([]); 
+      world.pointsData([...displayedAirports]);
+
+      document.body.classList.add('panel-open');
+      world.controls().autoRotate = false;
+      setTimeout(() => { world.width(window.innerWidth / 2); }, 100);
+
+      const firstLegStart = foundOptions[0].legs[0].from;
+      world.pointOfView({ lat: firstLegStart.latitude_deg, lng: firstLegStart.longitude_deg, altitude: 1.4 }, 1000);
+    }
+
+    // 5. CHỌN SÂN BAY (KHẮC PHỤC TRIỆT ĐỂ LỖI KẾT NỐI VÀO KHÔNG KHÍ)
+    function handleAirportSelect(point) {
+      isRouteMode = false;
+      selectedAirportId = point.ident;
+      connectedAirportIds.clear();
+
+      document.getElementById('itinerary-view').style.display = 'none';
+      document.getElementById('airport-details-view').style.display = 'block';
+
+      const isMilitary = !!point.isMilitary;
+      const isSmall = point.type === 'small_airport' || point.type === 'closed';
+      const matchedRoutes = [];
+      const codeIATA = String(point.iata_code || '').trim().toUpperCase();
+      const codeICAO = String(point.ident || '').trim().toUpperCase();
+
+      // Sân bay quân sự hoặc sân bay nhỏ không vẽ kết nối
+      if (!isMilitary && !isSmall) {
+        routesList.forEach(r => {
+          const s = String(r.src || '').trim().toUpperCase();
+          if (s === codeIATA || s === codeICAO) {
+            const target = airportsMap.get(String(r.dst).trim().toUpperCase());
+            // CHỈ VẼ KHI VÀ CHỈ KHI SÂN BAY ĐÍCH TỒN TẠI VÀ CÓ TỌA ĐỘ THẬT
+            if (target && target.latitude_deg && target.longitude_deg) {
+              connectedAirportIds.add(target.ident);
+              if (target.iata_code) connectedAirportIds.add(target.iata_code);
+
+              matchedRoutes.push({
+                startLat: point.latitude_deg, startLng: point.longitude_deg,
+                endLat: target.latitude_deg, endLng: target.longitude_deg,
+                color: ['#00f3ff', '#ff007f']
+              });
+            }
+          }
+        });
+      }
+
+      // ĐẢM BẢO TẤT CẢ CÁC SÂN BAY ĐÍCH ĐƯỢC KẾT NỐI LUÔN LUÔN XUẤT HIỆN TRÊN BẢN ĐỒ
+      applyFilter();
+
+      // TRUY VẤN TẦN SỐ VÔ TUYẾN
+      const aIdent = String(point.ident || '').trim().toUpperCase();
+      const aIata = String(point.iata_code || '').trim().toUpperCase();
+      const aRef = String(point.id || '').trim();
+
+      let airportFreqs = frequenciesByAirport.get(aIdent) || 
+                         frequenciesByAirport.get(aIata) || 
+                         frequenciesByAirport.get(aRef) || [];
+
+      const uniqueFreqs = [];
+      const seenF = new Set();
+      airportFreqs.forEach(f => {
+        const val = f.frequency_mhz ?? f.mhz ?? f.frequency;
+        const key = `${f.type}-${val}`;
+        if (!seenF.has(key)) {
+          seenF.add(key);
+          uniqueFreqs.push(f);
+        }
+      });
+      airportFreqs = uniqueFreqs;
+
+      const freqCount = airportFreqs.length;
+
+      // XÁC ĐỊNH MÀU SẮC ĐỒNG BỘ VỚI MÀU SÂN BAY
+      let ringColorRgb = '0, 243, 255';
+      if (point.isMilitary) ringColorRgb = '0, 255, 102';
+      else if (point.type === 'large_airport') ringColorRgb = '255, 0, 127';
+      else ringColorRgb = '255, 230, 0';
+
+      // HIỂN THỊ VÒNG TRÒN GRADIENT TẦN SỐ NẰM DƯỚI CÙNG
+      const maxCoverageRadius = Math.min(6.5, Math.max(1.8, 1.5 + freqCount * 0.45));
+
+      world.ringsData([{
+        latitude_deg: point.latitude_deg,
+        longitude_deg: point.longitude_deg,
+        maxR: maxCoverageRadius,
+        color: t => `rgba(${ringColorRgb}, ${0.35 * Math.pow(1 - t, 1.8)})`
+      }]);
+
+      world.arcsData(matchedRoutes);
+
+      const routeDisplayCount = (isMilitary || isSmall) ? -1 : matchedRoutes.length;
+      openAirportPanel(point, routeDisplayCount, airportFreqs);
+    }
+
+    function openAirportPanel(point, routeCount, airportFreqs) {
+      world.controls().autoRotate = false;
+      world.pointOfView({ lat: point.latitude_deg, lng: point.longitude_deg, altitude: 0.6 }, 1000);
+
+      document.body.classList.add('panel-open');
+
+      document.getElementById('airport-name').innerText = `> ${point.name || 'UNKNOWN'}`;
+      document.getElementById('airport-code').innerText = `${point.ident || '---'} / ${point.iata_code || '---'}`;
+      
+      const badge = document.getElementById('airport-type-badge');
+      if (point.isMilitary) {
+        badge.innerText = 'MILITARY AIRBASE';
+        badge.style.color = 'var(--neon-green)';
+      } else if (point.type === 'large_airport') {
+        badge.innerText = 'MAJOR CIVIL';
+        badge.style.color = 'var(--neon-pink)';
+      } else if (point.type === 'medium_airport') {
+        badge.innerText = 'REGIONAL CIVIL';
+        badge.style.color = 'var(--neon-yellow)';
+      } else {
+        badge.innerText = 'SMALL AIRSTRIP';
+        badge.style.color = '#888888';
+      }
+
+      document.getElementById('airport-elev').innerText = point.elevation_ft || 'N/A';
+      document.getElementById('airport-country').innerText = point.countryName;
+      document.getElementById('airport-municipality').innerText = point.municipality || 'N/A';
+      
+      // SÂN BAY QUÂN SỰ HOẶC KHÔNG CÓ KẾT NỐI
+      if (point.isMilitary || routeCount === -1 || routeCount === 0) {
+        document.getElementById('airport-routes').innerText = 'NO DATA';
+        document.getElementById('airport-routes').style.color = '#888888';
+      } else {
+        document.getElementById('airport-routes').innerText = `${routeCount} Connections`;
+        document.getElementById('airport-routes').style.color = 'var(--neon-cyan)';
+      }
+
+      renderIndividualRunways(point);
+      renderFrequenciesSection(airportFreqs);
+      renderCommentsSection(point);
+    }
+
+    function closePanel() {
+      document.body.classList.remove('panel-open');
+      world.controls().autoRotate = true;
+      selectedAirportId = null;
+      connectedAirportIds.clear();
+      isRouteMode = false;
+      
+      world.arcsData([]);
+      world.ringsData([]);
+      applyFilter();
+
+      setTimeout(() => {
+        world.width(window.innerWidth);
+      }, 100);
+    }
+
+    window.addEventListener('resize', () => {
+      world.width(document.body.classList.contains('panel-open') ? window.innerWidth / 2 : window.innerWidth);
+      world.height(window.innerHeight);
+    });
+
+    // 6. RENDER BLUEPRINTS
+    function renderIndividualRunways(airport) {
+      const grid = document.getElementById('blueprints-grid');
+      const statusText = document.getElementById('blueprint-status');
+      grid.innerHTML = '';
+
+      if (airport.isMilitary) {
+        document.getElementById('airport-rws-count').innerText = `RESTRICTED`;
+        statusText.innerText = `> ACCESS DENIED: CLASSIFIED MILITARY ASSET`;
+        statusText.style.color = `var(--neon-red)`;
+
+        const militaryCard = document.createElement('div');
+        militaryCard.className = 'blueprint-card';
+        militaryCard.style.gridColumn = 'span 2';
+        militaryCard.innerHTML = `
+          <canvas width="400" height="160"></canvas>
+          <div class="blueprint-card-info" style="color:var(--neon-red); justify-content:center;">
+            SECURITY LEVEL 5 - ASSET CLASSIFIED
+          </div>
+        `;
+        grid.appendChild(militaryCard);
+
+        const canvas = militaryCard.querySelector('canvas');
+        const ctx = canvas.getContext('2d');
+        const cx = 200, cy = 80;
+        ctx.strokeStyle = '#ff2a2a';
+        ctx.lineWidth = 1;
+        [28, 55].forEach(r => {
+          ctx.beginPath();
+          ctx.arc(cx, cy, r, 0, Math.PI * 2);
+          ctx.stroke();
+        });
+        ctx.fillStyle = '#ff2a2a';
+        ctx.font = 'bold 12px "Share Tech Mono"';
+        ctx.textAlign = 'center';
+        ctx.fillText('TOP SECRET // NOFORN', cx, cy - 6);
+        ctx.font = '9px "Share Tech Mono"';
+        ctx.fillText('TACTICAL BLUEPRINT SCRAMBLED', cx, cy + 12);
+        return;
+      }
+
+      const aIdent = String(airport.ident || '').trim().toUpperCase();
+      const aIata = String(airport.iata_code || '').trim().toUpperCase();
+      const aRef = String(airport.id || '').trim();
+
+      const matchedRunways = runwaysList.filter(r => {
+        const rIdent = String(r.airport_ident || '').trim().toUpperCase();
+        const rRef = String(r.airport_ref || '').trim();
+        return (rIdent && (rIdent === aIdent || (aIata && rIdent === aIata))) ||
+               (aRef && rRef && rRef === aRef);
+      });
+
+      if (matchedRunways.length === 0) {
+        document.getElementById('airport-rws-count').innerText = `NO DATA`;
+        statusText.style.color = `#888888`;
+        statusText.innerText = `> NO RUNWAY GEOMETRY DATA AVAILABLE`;
+
+        const noDataCard = document.createElement('div');
+        noDataCard.className = 'blueprint-card';
+        noDataCard.style.gridColumn = 'span 2';
+        noDataCard.innerHTML = `
+          <div style="padding: 30px 10px; text-align: center; color: #888;">
+            <div style="font-size: 0.85rem; color: #aaa; margin-bottom: 5px;">[ NO RUNWAY DATA IN DATABASE ]</div>
+            <div style="font-size: 0.72rem;">UNPAVED / LOCAL STRIP / ELEVATION PROFILE ONLY</div>
+          </div>
+        `;
+        grid.appendChild(noDataCard);
+        return;
+      }
+
+      document.getElementById('airport-rws-count').innerText = `${matchedRunways.length} Runway(s)`;
+      statusText.style.color = `var(--neon-green)`;
+      statusText.innerText = `> MULTI-VECTOR BLUEPRINTS LOADED [${matchedRunways.length} INDEPENDENT MODULES]`;
+
+      matchedRunways.forEach(rw => {
+        let hdg = rw.heading_degT;
+        if (hdg === null || hdg === undefined || isNaN(hdg)) {
+          const match = String(rw.le_ident || '').match(/\d+/);
+          hdg = match ? parseInt(match[0], 10) * 10 : 90;
+        }
+
+        const rwIdentText = `${rw.le_ident || 'RWY'} / ${rw.he_ident || '---'}`;
+        const card = document.createElement('div');
+        card.className = 'blueprint-card';
+        card.innerHTML = `
+          <canvas width="250" height="160"></canvas>
+          <div class="blueprint-card-info">
+            <span style="color:var(--neon-cyan); font-weight:bold;">${rwIdentText}</span>
+            <span>${rw.length_ft || 'N/A'}ft x ${rw.width_ft || 'N/A'}ft</span>
+            <span style="color:var(--neon-yellow);">${Math.round(hdg)}°</span>
+          </div>
+        `;
+        grid.appendChild(card);
+
+        const canvas = card.querySelector('canvas');
+        drawSingleRunwayCanvas(canvas, rw, hdg);
+      });
+    }
+
+    function drawSingleRunwayCanvas(canvas, rw, heading) {
+      const ctx = canvas.getContext('2d');
+      const cx = canvas.width / 2;
+      const cy = canvas.height / 2;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = 'rgba(0, 243, 255, 0.15)';
+      ctx.lineWidth = 1;
+      [32, 60].forEach(r => {
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.stroke();
+      });
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 65); ctx.lineTo(cx, cy + 65);
+      ctx.moveTo(cx - 65, cy); ctx.lineTo(cx + 65, cy);
+      ctx.stroke();
+
+      ctx.fillStyle = '#00f3ff';
+      ctx.font = '8px "Share Tech Mono"';
+      ctx.textAlign = 'center';
+      ctx.fillText('N', cx, cy - 68);
+      ctx.fillText('S', cx, cy + 74);
+      ctx.fillText('E', cx + 72, cy + 3);
+      ctx.fillText('W', cx - 72, cy + 3);
+
+      const lenFt = rw.length_ft || 7500;
+      const lengthPx = Math.min(Math.max(lenFt / 85, 75), 120);
+      const widthPx = Math.max((rw.width_ft || 150) / 13, 9);
+      const rad = (heading * Math.PI) / 180;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rad);
+
+      ctx.fillStyle = 'rgba(0, 243, 255, 0.28)';
+      ctx.strokeStyle = '#00f3ff';
+      ctx.lineWidth = 1.5;
+      ctx.fillRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
+      ctx.strokeRect(-widthPx / 2, -lengthPx / 2, widthPx, lengthPx);
+
+      ctx.strokeStyle = '#ffe600';
+      ctx.lineWidth = 1.2;
+      ctx.setLineDash([5, 4]);
+      ctx.beginPath();
+      ctx.moveTo(0, -lengthPx / 2 + 6);
+      ctx.lineTo(0, lengthPx / 2 - 6);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      ctx.fillStyle = '#ffffff';
+      ctx.font = 'bold 8px "Share Tech Mono"';
+      ctx.textAlign = 'center';
+      if (rw.le_ident) ctx.fillText(rw.le_ident, 0, lengthPx / 2 - 4);
+      if (rw.he_ident) ctx.fillText(rw.he_ident, 0, -lengthPx / 2 + 10);
+
+      ctx.restore();
+    }
+
+    // 7. RENDER FREQUENCIES VỚI TOOLTIP CHÚ GIẢI KHI HOVER
+    function renderFrequenciesSection(freqs) {
+      const container = document.getElementById('frequencies-container');
+      const badge = document.getElementById('freq-count-badge');
+      container.innerHTML = '';
+
+      if (!freqs || freqs.length === 0) {
+        badge.innerText = '[0 REGISTERED]';
+        container.innerHTML = `<div style="font-size:0.75rem; color:#888; padding:8px 0;">NO FREQUENCY DATA RECORDED</div>`;
+        return;
+      }
+
+      badge.innerText = `[${freqs.length} REGISTERED]`;
+      let rows = freqs.map(f => {
+        const rawMhz = f.frequency_mhz ?? f.mhz ?? f.frequency ?? f.freq;
+        const numMhz = parseFloat(rawMhz);
+        const displayMhz = (!isNaN(numMhz) && numMhz > 0) ? `${numMhz.toFixed(3)} MHz` : (rawMhz ? `${rawMhz} MHz` : '---');
+
+        const typeStr = String(f.type || 'COMM').trim().toUpperCase();
+        const tooltipDesc = FREQ_ABBREVIATIONS[typeStr] || f.description || 'Aeronautical Radio Service';
+
+        return `
+          <tr>
+            <td>
+              <span class="abbr-tooltip" data-tooltip="${tooltipDesc}" style="color:var(--neon-green); font-weight:bold;">
+                ${typeStr}
+              </span>
+            </td>
+            <td style="color:#fff;">${f.description || 'Airport Service'}</td>
+            <td style="color:var(--neon-cyan); font-weight:bold;">${displayMhz}</td>
+          </tr>
+        `;
+      }).join('');
+
+      container.innerHTML = `
+        <table class="freq-table">
+          <thead>
+            <tr>
+              <th>TYPE</th>
+              <th>DESCRIPTION</th>
+              <th>FREQUENCY</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+
+    // 8. RENDER COMMENTS (TỰ ĐỘNG ẨN NẾU LÀ SÂN BAY QUÂN SỰ)
+    function renderCommentsSection(airport) {
+      const wrapper = document.getElementById('comments-section-wrapper');
+      const container = document.getElementById('comments-container');
+      const badge = document.getElementById('comments-count-badge');
+      
+      // SÂN BAY QUÂN SỰ: LOẠI BỎ TOÀN BỘ PHẦN BÌNH LUẬN
+      if (airport.isMilitary) {
+        wrapper.style.display = 'none';
+        return;
+      }
+
+      wrapper.style.display = 'block';
+      container.innerHTML = '';
+
+      const aIdent = String(airport.ident || '').trim().toUpperCase();
+      const aId = String(airport.id || '').trim();
+
+      let matched = commentsByAirport.get(aIdent) || commentsByAirport.get(aId) || [];
+
+      if (!matched || matched.length === 0) {
+        badge.innerText = '[0 LOGS]';
+        container.innerHTML = `<div style="font-size:0.75rem; color:#888; padding:8px 0;">NO PILOT REPORTS / COMMENTS RECORDED</div>`;
+        return;
+      }
+
+      badge.innerText = `[${matched.length} LOGS]`;
+      container.innerHTML = matched.map(c => `
+        <div class="comment-item">
+          <div class="comment-meta">
+            <span class="comment-author">${c.member_nickname || c.nickname || 'Anonymous'}</span>
+            <span>${c.date ? String(c.date).slice(0, 10) : '---'}</span>
+          </div>
+          <div class="comment-body">${c.body || c.comment || 'No comment content provided.'}</div>
+        </div>
+      `).join('');
+    }
+  </script>
+</body>
+</html>
