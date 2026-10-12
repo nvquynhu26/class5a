@@ -221,7 +221,7 @@
     }
     .section-header span { font-size: 0.75rem; color: #888; }
 
-    /* BẢNG FREQUENCIES VỚI TOOLTIP HOVER */
+    /* BẢNG FREQUENCIES VÀ TOOLTIP HOVER */
     .freq-table {
       width: 100%;
       border-collapse: collapse;
@@ -239,27 +239,11 @@
       color: var(--neon-cyan);
     }
 
-    /* CUSTOM TOOLTIP KHI HOVER LÊN VIẾT TẮT */
     .abbr-tooltip {
-      position: relative;
       cursor: help;
       text-decoration: underline dotted var(--neon-green);
-    }
-    .abbr-tooltip:hover::after {
-      content: attr(data-tooltip);
-      position: absolute;
-      bottom: 125%;
-      left: 0;
-      background: #050a12;
-      color: #00ff66;
-      border: 1px solid #00ff66;
-      padding: 5px 10px;
-      font-size: 0.72rem;
-      white-space: nowrap;
-      z-index: 100;
-      box-shadow: 0 0 10px rgba(0, 255, 102, 0.4);
-      border-radius: 2px;
-      pointer-events: none;
+      font-weight: bold;
+      color: var(--neon-green);
     }
 
     /* KHUNG COMMENTS */
@@ -380,14 +364,16 @@
           <div id="blueprints-grid"></div>
           <div class="status-text" id="blueprint-status">> SYSTEM IDLE</div>
 
-          <!-- PHẦN FREQUENCIES -->
-          <div class="section-header" id="freq-section-title">
-            COMMUNICATION FREQUENCIES
-            <span id="freq-count-badge">[0 REGISTERED]</span>
+          <!-- KHỐI FREQUENCIES (ẨN NẾU LÀ QUÂN SỰ) -->
+          <div id="freq-section-wrapper">
+            <div class="section-header">
+              COMMUNICATION FREQUENCIES
+              <span id="freq-count-badge">[0 REGISTERED]</span>
+            </div>
+            <div id="frequencies-container"></div>
           </div>
-          <div id="frequencies-container"></div>
 
-          <!-- PHẦN COMMENTS (ẨN NẾU QUÂN SỰ) -->
+          <!-- KHỐI COMMENTS (ẨN NẾU LÀ QUÂN SỰ) -->
           <div id="comments-section-wrapper">
             <div class="section-header">
               PILOT INTEL & COMMUNITY LOGS
@@ -424,39 +410,36 @@
     let isRouteMode = false;
     let currentCategory = 'all';
 
-    // BẢNG TRA CỨU TỪ VIẾT TẮT TẦN SỐ HÀNG KHÔNG
-    const FREQ_ABBREVIATIONS = {
-      'ACC': 'Area Control Center (En-route Air Traffic Control)',
-      'RDR': 'Radar Control / Approach Surveillance Radar',
-      'RAD': 'Radar Control Service',
-      'TWR': 'Aerodrome Control Tower (Local Takeoff / Landing Control)',
-      'GND': 'Ground Control (Runway & Taxiway Surface Movement)',
+    // BẢNG GIẢI THÍCH TỪ VIẾT TẮT TẦN SỐ HÀNG KHÔNG (ICAO / FAA)
+    const FREQ_ABBR_MAP = {
+      'ACC': 'Area Control Center (En-route Control)',
       'APP': 'Approach Control (Terminal Radar Approach)',
-      'DEP': 'Departure Control (Climbout Radar Control)',
-      'ATIS': 'Automatic Terminal Information Service (Continuous Weather/Airport Broadcast)',
-      'CTAF': 'Common Traffic Advisory Frequency (Pilot Self-Announce)',
-      'UNIC': 'UNICOM (Aeronautical Advisory Station / Airport Services)',
-      'UNICOM': 'UNICOM (Aeronautical Advisory Station / Airport Services)',
-      'AFIS': 'Aerodrome Flight Information Service (Non-towered Airfield Advisory)',
-      'FSS': 'Flight Service Station (Preflight / Inflight Briefing)',
-      'CLD': 'Clearance Delivery (IFR Route Clearance)',
-      'DEL': 'Clearance Delivery (Departure Clearance)',
-      'A/G': 'Air-to-Ground Radio Station',
-      'A/D': 'Approach / Departure Radar Control',
-      'INFO': 'Aerodrome Flight Information Broadcast',
-      'OPS': 'Airline / Airport Operational Control',
-      'PMSV': 'Pilot-to-Metro Service (Military Weather)',
+      'ARR': 'Arrival Control',
+      'DEP': 'Departure Control',
+      'TWR': 'Aerodrome Control Tower',
+      'GND': 'Ground Movement Control',
+      'DEL': 'Clearance Delivery',
+      'RDR': 'Radar Control Service',
+      'ATIS': 'Automatic Terminal Information Service',
+      'CTAF': 'Common Traffic Advisory Frequency',
+      'UNIC': 'UNICOM (Aeronautical Advisory Station)',
+      'AFIS': 'Aerodrome Flight Information Service',
+      'MULT': 'MULTICOM (Self-announced Broadcast Frequency)',
+      'FSS': 'Flight Service Station',
       'AWOS': 'Automated Weather Observing System',
       'ASOS': 'Automated Surface Observing System',
-      'RCO': 'Remote Communications Outlet',
-      'EMR': 'Emergency Guard Frequency',
-      'MULT': 'MULTICOM (Air-to-Air Pilot Communication)',
-      'MISC': 'Miscellaneous Service Channel',
-      'APR': 'Approach Radar Service',
-      'DIR': 'Director (Final Radar Vectoring)',
-      'CNTR': 'Air Route Traffic Control Center',
-      'ARTC': 'Air Route Traffic Control Center'
+      'INFO': 'Flight Information Service',
+      'OPS': 'Airline or Airport Operations',
+      'VOLMET': 'Meteorological Information Broadcast for Aircraft in Flight',
+      'RADAR': 'Surveillance Radar Control',
+      'RADIO': 'Aeronautical Radio Station',
+      'EMERG': 'International Emergency Frequency (121.5 MHz)',
+      'ARCAL': 'Aircraft Radio Control of Aerodrome Lighting',
+      'MIL': 'Military Control Service'
     };
+
+    // BỘ LỌC CHẶN BÌNH LUẬN RÁC / QUẢNG CÁO (SPAM FILTER)
+    const SPAM_REGEX = /(?:visit:|https?:|\.com|\.org|\.net|\.xyz|\.top|\.tc|\.ru|agroinvestment|investing|investment|guaranteed\s+returns|forex|crypto|bitcoin|casino|loan\b|whatsapp|telegram)/i;
 
     function calcGreatCircleAngle(d) {
       const phi1 = d.startLat * Math.PI / 180;
@@ -466,7 +449,7 @@
       return Math.acos(Math.max(-1, Math.min(1, cosAngle)));
     }
 
-    // 1. GLOBE INITIALIZATION
+    // 1. GLOBE INITIALIZATION (CHIỀU CAO CHẤM TRÒN = 0, DÁN SÁT MẶT ĐẤT)
     const world = Globe()(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
       .backgroundColor('#0a0a0f')
@@ -475,13 +458,13 @@
       .atmosphereAltitude(0.12)
       .pointLat('latitude_deg')
       .pointLng('longitude_deg')
-      .pointAltitude(0) // XÓA BỎ HOÀN TOÀN CHIỀU CAO (DÁN SÁT MẶT ĐẤT)
+      .pointAltitude(0) // XÓA TOÀN BỘ ĐỘ CAO
       .pointRadius(d => {
         if (!selectedAirportId && !isRouteMode) {
           return d.isMilitary ? 0.28 : (d.type === 'large_airport' ? 0.38 : 0.16);
         }
         if (d.ident === selectedAirportId) return 0.65;
-        if (connectedAirportIds.has(d.iata_code) || connectedAirportIds.has(d.ident)) return 0.35;
+        if (connectedAirportIds.has(d.iata_code) || connectedAirportIds.has(d.ident)) return 0.38;
         return 0.05;
       })
       .pointColor(d => {
@@ -494,13 +477,16 @@
         return 'rgba(40, 40, 60, 0.2)';
       })
       .pointResolution(32)
+      
+      // DIỆN TÍCH FREQUENCIES NẰM DƯỚI CÙNG
       .ringLat('latitude_deg')
       .ringLng('longitude_deg')
-      .ringAltitude(0) // Vòng tròn gradient dán sát địa cầu
+      .ringAltitude(0)
       .ringColor(d => d.color)
       .ringMaxRadius('maxR')
       .ringPropagationSpeed(1.2)
       .ringRepeatPeriod(2800)
+
       .arcColor(d => d.color || ['rgba(0, 243, 255, 0.9)', 'rgba(255, 0, 127, 0.9)'])
       .arcStroke(0.12)
       .arcDashLength(d => {
@@ -513,9 +499,10 @@
         const factor = Math.max(0.6, rad / 0.5);
         return Math.max(0.004, 0.035 / factor);
       })
+      // TỐC ĐỘ DI CHUYỂN CHẬM LẠI 0.5 LẦN
       .arcDashAnimateTime(d => {
         const rad = calcGreatCircleAngle(d);
-        return Math.max(10000, rad * 7600); // Chậm lại 0.5 lần
+        return Math.max(10000, rad * 7600);
       })
       .arcAltitude(d => {
         const angle = calcGreatCircleAngle(d);
@@ -574,6 +561,7 @@
         if (a.id) airportsMap.set(String(a.id).trim(), a);
       });
 
+      // LỌC CHẶT CHẼ: CHỈ GIỮ ROUTES MÀ CẢ 2 ĐẦU CÓ TỌA ĐỘ THỰC
       routesList = routes.filter(r => {
         const srcObj = airportsMap.get(String(r.src).trim().toUpperCase());
         const dstObj = airportsMap.get(String(r.dst).trim().toUpperCase());
@@ -603,14 +591,16 @@
         });
       }
 
-      // XỬ LÝ COMMENTS + BỘ LỌC QUẢNG CÁO RÁC (ANTI-SPAM)
+      // XỬ LÝ COMMENTS KÈM BỘ LỌC CHẶN SPAM/QUẢNG CÁO
       if (Array.isArray(comments) && comments.length > 0) {
-        const spamPattern = /invest|crypto|bitcoin|telegramm?:|whatsapp|agriinvest|agroinvestment|diamond starter|platinum growth|emerald pro|returns are guaranteed|no risks involved|minimum \$\d+|forex|binary option|loan/i;
-        
         comments.forEach(c => {
-          const textCheck = `${c.member_nickname || ''} ${c.subject || ''} ${c.body || ''}`;
-          if (spamPattern.test(textCheck)) {
-            return; // Loại bỏ comment spam
+          const bodyText = String(c.body || '');
+          const subjText = String(c.subject || '');
+          const nickText = String(c.member_nickname || c.nickname || '');
+
+          // BỎ QUA NẾU CHỨA NỘI DUNG QUẢNG CÁO/SPAM
+          if (SPAM_REGEX.test(bodyText) || SPAM_REGEX.test(subjText) || SPAM_REGEX.test(nickText)) {
+            return;
           }
 
           const cIdent = c.airport_ident ? String(c.airport_ident).trim().toUpperCase() : null;
@@ -678,23 +668,6 @@
       } else if (currentCategory === 'military') {
         displayedAirports = allAirportsList.filter(a => a.isMilitary);
       }
-
-      // NẾU ĐANG CHỌN SÂN BAY: Bắt buộc giữ lại cả sân bay đã chọn và TẤT CẢ các sân bay kết nối
-      if (selectedAirportId) {
-        const selectedAirport = airportsMap.get(selectedAirportId);
-        const forceShowSet = new Map();
-        
-        displayedAirports.forEach(a => forceShowSet.set(a.ident, a));
-        if (selectedAirport) forceShowSet.set(selectedAirport.ident, selectedAirport);
-
-        connectedAirportIds.forEach(id => {
-          const connAir = airportsMap.get(id);
-          if (connAir) forceShowSet.set(connAir.ident, connAir);
-        });
-
-        displayedAirports = Array.from(forceShowSet.values());
-      }
-
       world.pointsData(displayedAirports);
     }
 
@@ -936,7 +909,7 @@
       world.pointOfView({ lat: firstLegStart.latitude_deg, lng: firstLegStart.longitude_deg, altitude: 1.4 }, 1000);
     }
 
-    // 5. CHỌN SÂN BAY (KHẮC PHỤC TRIỆT ĐỂ LỖI KẾT NỐI VÀO KHÔNG KHÍ)
+    // 5. CHỌN SÂN BAY (BẮT BUỘC HIỂN THỊ CÁC SÂN BAY ĐÍCH KẾT NỐI BẤT KỂ BỘ LỌC)
     function handleAirportSelect(point) {
       isRouteMode = false;
       selectedAirportId = point.ident;
@@ -945,22 +918,24 @@
       document.getElementById('itinerary-view').style.display = 'none';
       document.getElementById('airport-details-view').style.display = 'block';
 
-      const isMilitary = !!point.isMilitary;
+      const isMilitary = Boolean(point.isMilitary);
       const isSmall = point.type === 'small_airport' || point.type === 'closed';
       const matchedRoutes = [];
       const codeIATA = String(point.iata_code || '').trim().toUpperCase();
       const codeICAO = String(point.ident || '').trim().toUpperCase();
+      const connectedAirportsList = [];
 
-      // Sân bay quân sự hoặc sân bay nhỏ không vẽ kết nối
+      // SÂN BAY QUÂN SỰ HOẶC SÂN BAY NHỎ KHÔNG VẼ ĐƯỜNG BAY
       if (!isMilitary && !isSmall) {
         routesList.forEach(r => {
           const s = String(r.src || '').trim().toUpperCase();
           if (s === codeIATA || s === codeICAO) {
             const target = airportsMap.get(String(r.dst).trim().toUpperCase());
-            // CHỈ VẼ KHI VÀ CHỈ KHI SÂN BAY ĐÍCH TỒN TẠI VÀ CÓ TỌA ĐỘ THẬT
-            if (target && target.latitude_deg && target.longitude_deg) {
+            // CHỈ VẼ ĐƯỜNG BAY NẾU ĐÍCH ĐẾN THỰC SỰ TỒN TẠI VÀ CÓ TỌA ĐỘ
+            if (target && target.latitude_deg != null && target.longitude_deg != null) {
               connectedAirportIds.add(target.ident);
               if (target.iata_code) connectedAirportIds.add(target.iata_code);
+              connectedAirportsList.push(target);
 
               matchedRoutes.push({
                 startLat: point.latitude_deg, startLng: point.longitude_deg,
@@ -972,10 +947,14 @@
         });
       }
 
-      // ĐẢM BẢO TẤT CẢ CÁC SÂN BAY ĐÍCH ĐƯỢC KẾT NỐI LUÔN LUÔN XUẤT HIỆN TRÊN BẢN ĐỒ
-      applyFilter();
+      // ĐẢM BẢO TẤT CẢ SÂN BAY KẾT NỐI ĐƯỢC HIỂN THỊ LÊN QUẢ ĐỊA CẦU BẤT KỂ ĐANG LỌC GÌ
+      const finalPointsMap = new Map();
+      displayedAirports.forEach(a => finalPointsMap.set(a.ident, a));
+      finalPointsMap.set(point.ident, point);
+      connectedAirportsList.forEach(a => finalPointsMap.set(a.ident, a));
+      world.pointsData(Array.from(finalPointsMap.values()));
 
-      // TRUY VẤN TẦN SỐ VÔ TUYẾN
+      // TÍNH TOÁN FREQUENCIES
       const aIdent = String(point.ident || '').trim().toUpperCase();
       const aIata = String(point.iata_code || '').trim().toUpperCase();
       const aRef = String(point.id || '').trim();
@@ -987,8 +966,7 @@
       const uniqueFreqs = [];
       const seenF = new Set();
       airportFreqs.forEach(f => {
-        const val = f.frequency_mhz ?? f.mhz ?? f.frequency;
-        const key = `${f.type}-${val}`;
+        const key = `${f.type}-${f.frequency_mhz || f.mhz || f.frequency}`;
         if (!seenF.has(key)) {
           seenF.add(key);
           uniqueFreqs.push(f);
@@ -998,26 +976,27 @@
 
       const freqCount = airportFreqs.length;
 
-      // XÁC ĐỊNH MÀU SẮC ĐỒNG BỘ VỚI MÀU SÂN BAY
-      let ringColorRgb = '0, 243, 255';
-      if (point.isMilitary) ringColorRgb = '0, 255, 102';
-      else if (point.type === 'large_airport') ringColorRgb = '255, 0, 127';
-      else ringColorRgb = '255, 230, 0';
+      // HIỂN THỊ VÒNG TRÒN DIỆN TÍCH TẦN SỐ NẾU CÓ DATA
+      if (!isMilitary && freqCount > 0) {
+        let ringColorRgb = '0, 243, 255';
+        if (point.type === 'large_airport') ringColorRgb = '255, 0, 127';
+        else ringColorRgb = '255, 230, 0';
 
-      // HIỂN THỊ VÒNG TRÒN GRADIENT TẦN SỐ NẰM DƯỚI CÙNG
-      const maxCoverageRadius = Math.min(6.5, Math.max(1.8, 1.5 + freqCount * 0.45));
+        const maxCoverageRadius = Math.min(6.5, Math.max(1.8, 1.5 + freqCount * 0.45));
 
-      world.ringsData([{
-        latitude_deg: point.latitude_deg,
-        longitude_deg: point.longitude_deg,
-        maxR: maxCoverageRadius,
-        color: t => `rgba(${ringColorRgb}, ${0.35 * Math.pow(1 - t, 1.8)})`
-      }]);
+        world.ringsData([{
+          latitude_deg: point.latitude_deg,
+          longitude_deg: point.longitude_deg,
+          maxR: maxCoverageRadius,
+          color: t => `rgba(${ringColorRgb}, ${0.35 * Math.pow(1 - t, 1.8)})`
+        }]);
+      } else {
+        world.ringsData([]);
+      }
 
       world.arcsData(matchedRoutes);
 
-      const routeDisplayCount = (isMilitary || isSmall) ? -1 : matchedRoutes.length;
-      openAirportPanel(point, routeDisplayCount, airportFreqs);
+      openAirportPanel(point, (isMilitary || isSmall) ? -1 : matchedRoutes.length, airportFreqs);
     }
 
     function openAirportPanel(point, routeCount, airportFreqs) {
@@ -1048,8 +1027,11 @@
       document.getElementById('airport-country').innerText = point.countryName;
       document.getElementById('airport-municipality').innerText = point.municipality || 'N/A';
       
-      // SÂN BAY QUÂN SỰ HOẶC KHÔNG CÓ KẾT NỐI
-      if (point.isMilitary || routeCount === -1 || routeCount === 0) {
+      // SÂN BAY QUÂN SỰ HOẶC THIẾU DATA THÌ GHI RÕ KHÔNG CÓ DATA
+      if (point.isMilitary) {
+        document.getElementById('airport-routes').innerText = 'RESTRICTED / NO DATA';
+        document.getElementById('airport-routes').style.color = '#888888';
+      } else if (routeCount === -1 || routeCount === 0) {
         document.getElementById('airport-routes').innerText = 'NO DATA';
         document.getElementById('airport-routes').style.color = '#888888';
       } else {
@@ -1058,8 +1040,20 @@
       }
 
       renderIndividualRunways(point);
-      renderFrequenciesSection(airportFreqs);
-      renderCommentsSection(point);
+
+      // QUÂN SỰ: LOẠI BỎ TOÀN BỘ PHẦN FREQUENCIES VÀ COMMUNITY LOGS
+      const freqWrapper = document.getElementById('freq-section-wrapper');
+      const commentsWrapper = document.getElementById('comments-section-wrapper');
+
+      if (point.isMilitary) {
+        freqWrapper.style.display = 'none';
+        commentsWrapper.style.display = 'none';
+      } else {
+        freqWrapper.style.display = 'block';
+        commentsWrapper.style.display = 'block';
+        renderFrequenciesSection(airportFreqs);
+        renderCommentsSection(point);
+      }
     }
 
     function closePanel() {
@@ -1071,7 +1065,7 @@
       
       world.arcsData([]);
       world.ringsData([]);
-      applyFilter();
+      world.pointsData([...displayedAirports]);
 
       setTimeout(() => {
         world.width(window.innerWidth);
@@ -1083,7 +1077,7 @@
       world.height(window.innerHeight);
     });
 
-    // 6. RENDER BLUEPRINTS
+    // 6. RENDER MULTI-BLUEPRINTS
     function renderIndividualRunways(airport) {
       const grid = document.getElementById('blueprints-grid');
       const statusText = document.getElementById('blueprint-status');
@@ -1242,7 +1236,7 @@
       ctx.restore();
     }
 
-    // 7. RENDER FREQUENCIES VỚI TOOLTIP CHÚ GIẢI KHI HOVER
+    // 7. RENDER FREQUENCIES (KÈM TOOLTIP GIẢI THÍCH VIẾT TẮT TIẾNG ANH)
     function renderFrequenciesSection(freqs) {
       const container = document.getElementById('frequencies-container');
       const badge = document.getElementById('freq-count-badge');
@@ -1256,21 +1250,19 @@
 
       badge.innerText = `[${freqs.length} REGISTERED]`;
       let rows = freqs.map(f => {
+        const rawType = String(f.type || 'COMM').trim().toUpperCase();
+        const tooltipText = FREQ_ABBR_MAP[rawType] || `${rawType} Aeronautical Radio Channel`;
+
         const rawMhz = f.frequency_mhz ?? f.mhz ?? f.frequency ?? f.freq;
         const numMhz = parseFloat(rawMhz);
         const displayMhz = (!isNaN(numMhz) && numMhz > 0) ? `${numMhz.toFixed(3)} MHz` : (rawMhz ? `${rawMhz} MHz` : '---');
 
-        const typeStr = String(f.type || 'COMM').trim().toUpperCase();
-        const tooltipDesc = FREQ_ABBREVIATIONS[typeStr] || f.description || 'Aeronautical Radio Service';
-
         return `
           <tr>
             <td>
-              <span class="abbr-tooltip" data-tooltip="${tooltipDesc}" style="color:var(--neon-green); font-weight:bold;">
-                ${typeStr}
-              </span>
+              <span class="abbr-tooltip" title="${tooltipText}">${rawType}</span>
             </td>
-            <td style="color:#fff;">${f.description || 'Airport Service'}</td>
+            <td style="color:#fff;">${f.description || f.desc || 'Service Channel'}</td>
             <td style="color:var(--neon-cyan); font-weight:bold;">${displayMhz}</td>
           </tr>
         `;
@@ -1290,19 +1282,10 @@
       `;
     }
 
-    // 8. RENDER COMMENTS (TỰ ĐỘNG ẨN NẾU LÀ SÂN BAY QUÂN SỰ)
+    // 8. RENDER COMMENTS (ĐÃ ĐƯỢC LÀM SẠCH VÀ LOẠI BỎ SPAM QUẢNG CÁO)
     function renderCommentsSection(airport) {
-      const wrapper = document.getElementById('comments-section-wrapper');
       const container = document.getElementById('comments-container');
       const badge = document.getElementById('comments-count-badge');
-      
-      // SÂN BAY QUÂN SỰ: LOẠI BỎ TOÀN BỘ PHẦN BÌNH LUẬN
-      if (airport.isMilitary) {
-        wrapper.style.display = 'none';
-        return;
-      }
-
-      wrapper.style.display = 'block';
       container.innerHTML = '';
 
       const aIdent = String(airport.ident || '').trim().toUpperCase();
