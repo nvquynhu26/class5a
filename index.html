@@ -449,7 +449,7 @@
       return Math.acos(Math.max(-1, Math.min(1, cosAngle)));
     }
 
-    // 1. GLOBE INITIALIZATION (ĐÃ CẬP NHẬT: KÍCH THƯỚC ĐIỂM MAJOR DỰA TRÊN SỐ KẾT NỐI/CHUYẾN BAY)
+    // 1. GLOBE INITIALIZATION (NÂNG CẤP KÍCH THƯỚC ĐIỂM THEO SỐ CONNECTIONS)
     const world = Globe()(globeContainer)
       .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
       .backgroundColor('#0a0a0f')
@@ -460,24 +460,17 @@
       .pointLng('longitude_deg')
       .pointAltitude(0)
       .pointRadius(d => {
-        // TÍNH KÍCH THƯỚC THEO QUY MÔ KẾT NỐI
         if (!selectedAirportId && !isRouteMode) {
           if (d.isMilitary) return 0.28;
           if (d.type === 'large_airport') {
-            const routes = d.routeCount || 0;
-            // Sân bay càng nhiều kết nối/chuyến bay thì điểm càng to rõ (từ 0.30 đến 0.85)
-            return 0.30 + Math.min(0.55, Math.sqrt(routes) * 0.02);
+            // Sân bay Major có càng nhiều kết nối thì điểm càng to nổi bật
+            const conn = d.routesCount || 0;
+            return Math.min(0.78, 0.38 + Math.sqrt(conn) * 0.04);
           }
           return 0.16;
         }
-        if (d.ident === selectedAirportId) return 0.90;
-        if (connectedAirportIds.has(d.iata_code) || connectedAirportIds.has(d.ident)) {
-          if (d.type === 'large_airport') {
-            const routes = d.routeCount || 0;
-            return 0.32 + Math.min(0.40, Math.sqrt(routes) * 0.015);
-          }
-          return 0.38;
-        }
+        if (d.ident === selectedAirportId) return 0.68;
+        if (connectedAirportIds.has(d.iata_code) || connectedAirportIds.has(d.ident)) return 0.42;
         return 0.05;
       })
       .pointColor(d => {
@@ -491,7 +484,7 @@
       })
       .pointResolution(32)
       
-      // DIỆN TÍCH FREQUENCIES NẰM DƯỚI CÙNG
+      // HIỆU ỨNG PHÁT SÁNG CHO CÁC SÂN BAY MAJOR LỚN NHIỀU CONNECTIONS KHI CHƯA CHỌN
       .ringLat('latitude_deg')
       .ringLng('longitude_deg')
       .ringAltitude(0)
@@ -564,7 +557,7 @@
           ...a,
           isMilitary: isMilitary,
           countryName: countriesMap.get(a.iso_country) || a.iso_country || '',
-          routeCount: 0 // Khởi tạo số lượng chuyến bay kết nối
+          routesCount: 0
         };
       });
       
@@ -574,18 +567,29 @@
         if (a.id) airportsMap.set(String(a.id).trim(), a);
       });
 
+      // TÍNH TOÁN SỐ LƯỢNG CONNECTION CHO TỪNG SÂN BAY TỪ ROUTES.DAT
+      const routeCountsMap = new Map();
       routesList = routes.filter(r => {
-        const srcObj = airportsMap.get(String(r.src).trim().toUpperCase());
-        const dstObj = airportsMap.get(String(r.dst).trim().toUpperCase());
-        return srcObj && dstObj && srcObj.latitude_deg && dstObj.latitude_deg;
+        const srcKey = String(r.src).trim().toUpperCase();
+        const dstKey = String(r.dst).trim().toUpperCase();
+        const srcObj = airportsMap.get(srcKey);
+        const dstObj = airportsMap.get(dstKey);
+        
+        if (srcObj && dstObj && srcObj.latitude_deg && dstObj.latitude_deg) {
+          routeCountsMap.set(srcKey, (routeCountsMap.get(srcKey) || 0) + 1);
+          routeCountsMap.set(dstKey, (routeCountsMap.get(dstKey) || 0) + 1);
+          return true;
+        }
+        return false;
       });
 
-      // TÍNH TOÁN SỐ LƯỢNG CHUYẾN BAY/KẾT NỐI CHO MỖI SÂN BAY
-      routesList.forEach(r => {
-        const srcObj = airportsMap.get(String(r.src).trim().toUpperCase());
-        if (srcObj) {
-          srcObj.routeCount = (srcObj.routeCount || 0) + 1;
-        }
+      // GÁN TỔNG SỐ CONNECTIONS VÀO TỪNG OBJECT SÂN BAY
+      allAirportsList.forEach(a => {
+        const identKey = String(a.ident || '').trim().toUpperCase();
+        const iataKey = String(a.iata_code || '').trim().toUpperCase();
+        const c1 = routeCountsMap.get(identKey) || 0;
+        const c2 = routeCountsMap.get(iataKey) || 0;
+        a.routesCount = Math.max(c1, c2);
       });
 
       runwaysList = runways;
@@ -688,6 +692,22 @@
         displayedAirports = allAirportsList.filter(a => a.isMilitary);
       }
       world.pointsData(displayedAirports);
+
+      // TẠO HIỆU ỨNG VẦNG HÀO QUANG PHÁT SÁNG CHO CÁC SÂN BAY MAJOR CÓ NHIỀU CHUYẾN BAY (HUBS)
+      if (!selectedAirportId && !isRouteMode) {
+        const majorHubsRings = displayedAirports
+          .filter(a => a.type === 'large_airport' && !a.isMilitary && (a.routesCount || 0) >= 25)
+          .map(hub => {
+            const rSize = Math.min(2.5, 1.2 + Math.sqrt(hub.routesCount) * 0.08);
+            return {
+              latitude_deg: hub.latitude_deg,
+              longitude_deg: hub.longitude_deg,
+              maxR: rSize,
+              color: t => `rgba(255, 0, 127, ${0.45 * Math.pow(1 - t, 2)})`
+            };
+          });
+        world.ringsData(majorHubsRings);
+      }
     }
 
     function cleanStr(s) {
@@ -1082,8 +1102,10 @@
       isRouteMode = false;
       
       world.arcsData([]);
-      world.ringsData([]);
       world.pointsData([...displayedAirports]);
+
+      // KHÔI PHỤC LẠI HÀO QUANG CÁC MAJOR HUBS KHI ĐÓNG PANEL
+      applyFilter();
 
       // TRẢ TRÁI ĐẤT VỀ CHÍNH GIỮA TOÀN MÀN HÌNH NGAY KHI ĐÓNG PANEL
       world.width(window.innerWidth);
